@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SEO Analyser</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --s1: #161920;
+      --s2: #1c1f28;
+      --s3: #222631;
+      --border: #2a2e3d;
+      --text: #e2e5f1;
+      --muted: #5a6080;
+      --dim: #363b52;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+      --cyan: #06b6d4;
+      --font: 'Segoe UI', system-ui, sans-serif;
+      --mono: 'Cascadia Code', 'Fira Code', monospace;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* HERO */
+    .hero {
+      padding: 40px 32px 32px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #0f1117 0%, #161a2a 100%);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--blue);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 42px);
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 8px;
+      line-height: 1.1;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-sub {
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 600px;
+      margin-bottom: 28px;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 10px;
+      max-width: 700px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 260px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 18px;
+      font-size: 14px;
+      font-family: var(--font);
+      outline: none;
+      border-radius: 8px;
+      transition: border-color .2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--blue);
+    }
+
+    .search-input::placeholder {
+      color: var(--muted);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      border-radius: 8px;
+      transition: all .2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      background: var(--dim);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: transparent;
+    }
+
+    .pages-select {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    /* PROGRESS */
+    #progress-section {
+      display: none;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--s1);
+    }
+
+    .progress-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .progress-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .progress-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .progress-bar-wrap {
+      background: var(--s3);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+      border-radius: 4px;
+      transition: width .3s;
+      width: 0;
+    }
+
+    .progress-stats {
+      display: flex;
+      gap: 24px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .progress-stat span {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* SUMMARY CARDS */
+    #summary-section {
+      display: none;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .summary-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      padding: 16px 18px;
+      border-radius: 8px;
+    }
+
+    .card-val {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .card-lbl {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .card-sub {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .cv-green {
+      color: var(--green);
+    }
+
+    .cv-yellow {
+      color: var(--yellow);
+    }
+
+    .cv-red {
+      color: var(--red);
+    }
+
+    .cv-blue {
+      color: var(--blue);
+    }
+
+    .cv-purple {
+      color: var(--purple);
+    }
+
+    /* FILTERS */
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .filter-btn {
+      padding: 5px 14px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font);
+      border-radius: 20px;
+      transition: all .15s;
+    }
+
+    .filter-btn:hover,
+    .filter-btn.active {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .search-filter {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      outline: none;
+      font-family: var(--font);
+      margin-left: auto;
+    }
+
+    .search-filter::placeholder {
+      color: var(--muted);
+    }
+
+    /* MAIN TABLE */
+    #results-section {
+      display: none;
+      padding: 0 32px 32px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead th {
+      background: var(--s2);
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    thead th:first-child {
+      min-width: 220px;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .1s;
+    }
+
+    tbody tr:hover {
+      background: var(--s1);
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    td {
+      padding: 10px 14px;
+      vertical-align: top;
+    }
+
+    td.url-cell {
+      font-family: var(--mono);
+      font-size: 11px;
+      max-width: 280px;
+      word-break: break-all;
+    }
+
+    td.url-cell a {
+      color: var(--blue);
+    }
+
+    /* SCORE BADGE */
+    .score-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-weight: 800;
+      font-size: 13px;
+      border: 2px solid;
+    }
+
+    .score-a {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .score-b {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .score-c {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+
+    .score-d {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* STATUS / TAG PILLS */
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .pill-green {
+      background: rgba(34, 197, 94, 0.12);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .pill-yellow {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--yellow);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .pill-red {
+      background: rgba(239, 68, 68, 0.12);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .pill-blue {
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--blue);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+
+    .pill-gray {
+      background: rgba(90, 96, 128, 0.15);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* EXPAND ROW */
+    .expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--blue);
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background .15s;
+    }
+
+    .expand-btn:hover {
+      background: var(--s3);
+    }
+
+    .detail-row {
+      display: none;
+      background: var(--s2);
+    }
+
+    .detail-row.open {
+      display: table-row;
+    }
+
+    .detail-content {
+      padding: 20px 24px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .detail-block {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .detail-block-hdr {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .detail-block-body {
+      padding: 12px 14px;
+    }
+
+    .detail-row-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(42, 46, 61, 0.5);
+      font-size: 11px;
+      gap: 12px;
+    }
+
+    .detail-row-item:last-child {
+      border-bottom: none;
+    }
+
+    .dri-label {
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .dri-val {
+      color: var(--text);
+      text-align: right;
+      font-family: var(--mono);
+      font-size: 10px;
+      word-break: break-all;
+    }
+
+    .issues-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .issue-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .issue-item.err {
+      background: rgba(239, 68, 68, 0.07);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .issue-item.warn {
+      background: rgba(245, 158, 11, 0.07);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .issue-item.ok {
+      background: rgba(34, 197, 94, 0.07);
+      border: 1px solid rgba(34, 197, 94, 0.15);
+    }
+
+    .issue-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+
+    .dot-err {
+      background: var(--red);
+    }
+
+    .dot-warn {
+      background: var(--yellow);
+    }
+
+    .dot-ok {
+      background: var(--green);
+    }
+
+    .headings-tree {
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.9;
+    }
+
+    .h-item {
+      display: flex;
+      gap: 8px;
+    }
+
+    .h-tag {
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .h1t {
+      color: var(--blue);
+    }
+
+    .h2t {
+      color: var(--cyan);
+    }
+
+    .h3t {
+      color: var(--green);
+    }
+
+    .h4t,
+    .h5t,
+    .h6t {
+      color: var(--muted);
+    }
+
+    .h-text {
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .img-item {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+
+    .img-item:last-child {
+      border-bottom: none;
+    }
+
+    .img-filename {
+      color: var(--blue);
+      font-family: var(--mono);
+      word-break: break-all;
+    }
+
+    .img-issues {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .optimize-tip {
+      background: rgba(59, 130, 246, 0.06);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.7;
+      margin-top: 8px;
+    }
+
+    .optimize-tip strong {
+      color: var(--blue);
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+
+    .bar-label {
+      font-size: 10px;
+      color: var(--muted);
+      width: 80px;
+      flex-shrink: 0;
+    }
+
+    .bar-wrap {
+      flex: 1;
+      background: var(--s3);
+      border-radius: 3px;
+      height: 5px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .bar-val {
+      font-size: 10px;
+      color: var(--text);
+      width: 32px;
+      text-align: right;
+    }
+
+    /* EMPTY / ERROR STATES */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .empty-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    /* SPEED INDICATOR */
+    .speed-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .speed-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* TOOLTIP */
+    [title] {
+      cursor: help;
+    }
+
+    /* RESPONSIVE */
+    @media(max-width:768px) {
+
+      .hero,
+      .#results-section {
+        padding: 20px 16px;
+      }
+
+      .search-row {
+        flex-direction: column;
+      }
+
+      .search-input {
+        min-width: 100%;
+      }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+
+<body>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-badge">🔍 SEO Analyser</div>
+    <h1>Audit Your Website's <span>SEO Health</span></h1>
+    <p class="hero-sub">Enter a domain to crawl the sitemap, analyse every page, and get actionable SEO insights —
+      title, meta, headings, images, speed, and more.</p>
+
+    <div class="search-row">
+      <input type="text" id="domain-input" class="search-input" placeholder="example.com or https://example.com"
+        value="">
+      <select id="max-pages" class="pages-select">
+        <option value="1">1 page (Exact URL)</option>
+        <option value="10">10 pages</option>
+        <option value="25">25 pages</option>
+        <option value="50" selected>50 pages</option>
+        <option value="100">100 pages</option>
+        <option value="200">200 pages</option>
+        <option value="500">500 pages</option>
+        <option value="1000">1000 pages</option>
+      </select>
+      <button class="btn" id="analyse-btn" onclick="startAnalysis()">Analyse Site</button>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);">
+      Fetches sitemap.xml → crawls pages → checks title, meta, headings, images, speed, links, Open Graph &amp; more
+    </div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div id="progress-section">
+    <div class="progress-header">
+      <div class="spinner" id="spinner"></div>
+      <div class="progress-title" id="progress-title">Fetching sitemap...</div>
+      <div class="progress-sub" id="progress-sub"></div>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="progress-stats">
+      <div>Pages found: <span id="stat-total">—</span></div>
+      <div>Analysed: <span id="stat-done">0</span></div>
+      <div>Sitemap: <span id="stat-sitemap">—</span></div>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div id="summary-section">
+    <div class="summary-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>📊 Summary</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-outline"
+          style="padding:6px 12px; font-size:12px; display:flex; align-items:center; gap:6px;"
+          onclick="downloadSummaryJSON()">📄 JSON</button>
+        <button class="btn btn-outline"
+          style="padding:6px 12px; font-size:12px; display:flex; align-items:center; gap:6px;"
+          onclick="downloadSummaryCSV()">📊 CSV</button>
+        <button class="btn btn-outline"
+          style="padding:6px 12px; font-size:12px; display:flex; align-items:center; gap:6px;"
+          onclick="downloadSummaryExcel()">📥 Excel</button>
+      </div>
+    </div>
+    <div class="cards-row" id="summary-cards"></div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All pages</button>
+      <button class="filter-btn" onclick="setFilter('issues',this)">Has Issues</button>
+      <button class="filter-btn" onclick="setFilter('warnings',this)">Has Warnings</button>
+      <button class="filter-btn" onclick="setFilter('good',this)">Score 80+</button>
+      <button class="filter-btn" onclick="setFilter('no_title',this)">No Title</button>
+      <button class="filter-btn" onclick="setFilter('no_desc',this)">No Description</button>
+      <button class="filter-btn" onclick="setFilter('no_h1',this)">No H1</button>
+      <button class="filter-btn" onclick="setFilter('img_issues',this)">Image Issues</button>
+      <input type="text" class="search-filter" id="search-filter" placeholder="Search URL..." oninput="renderTable()">
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div id="results-section">
+    <div class="table-wrap">
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Page URL</th>
+            <th>Score</th>
+            <th>Status</th>
+            <th>Title</th>
+            <th>Title Len</th>
+            <th>Meta Desc</th>
+            <th>Desc Len</th>
+            <th>H1</th>
+            <th>H2</th>
+            <th>H3</th>
+            <th>Images</th>
+            <th>No Alt</th>
+            <th>Words</th>
+            <th>Load (ms)</th>
+            <th>Issues</th>
+            <th>Warns</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+    <div id="empty-state" class="empty-state" style="display:none;">
+      <div class="empty-icon">🔎</div>
+      <div class="empty-title">No pages match this filter</div>
+      <div>Try a different filter or search term</div>
+    </div>
+  </div>
+  <!-- BEFORE (free build - missing features) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- AFTER (use jsDelivr which has full build) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    let currentJobId = null;
+    let allResults = [];
+    let currentFilter = 'all';
+    let pollInterval = null;
+
+    function startAnalysis() {
+      const domain = document.getElementById('domain-input').value.trim();
+      if (!domain) { alert('Please enter a domain name'); return; }
+
+      const maxPages = document.getElementById('max-pages').value;
+
+      // Reset UI
+      allResults = [];
+      currentFilter = 'all';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.filter-btn')[0].classList.add('active');
+      document.getElementById('results-body').innerHTML = '';
+      document.getElementById('summary-cards').innerHTML = '';
+      document.getElementById('progress-bar').style.width = '0%';
+      document.getElementById('stat-total').textContent = '—';
+      document.getElementById('stat-done').textContent = '0';
+      document.getElementById('stat-sitemap').textContent = '—';
+
+      document.getElementById('progress-section').style.display = 'block';
+      document.getElementById('summary-section').style.display = 'none';
+      document.getElementById('results-section').style.display = 'none';
+      document.getElementById('analyse-btn').disabled = true;
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('progress-title').textContent = 'Connecting...';
+
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+
+      const encodedDomain = encodeURIComponent(domain);
+      fetch(`/api/analyse?domain=${encodedDomain}&max_pages=${maxPages}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          currentJobId = data.job_id;
+          pollInterval = setInterval(pollStatus, 1000);
+          pollStatus(); // Call once immediately
+        })
+        .catch(err => {
+          document.getElementById('progress-title').textContent = '⚠ ' + err.message;
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('analyse-btn').disabled = false;
+        });
+    }
+    function pollStatus() {
+      if (!currentJobId) return;
+      fetch(`/api/status?job_id=${encodeURIComponent(currentJobId)}`)
+        .then(r => r.json())
+        .then(data => {
+          const total = data.total || 0;
+          const done = data.progress || 0;
+          const status = data.status;
+
+          // Update progress
+          document.getElementById('stat-total').textContent = total || '—';
+          document.getElementById('stat-done').textContent = done;
+          if (data.sitemap_url) {
+            const sm = data.sitemap_url.replace(/^https?:\/\/[^\/]+/, '');
+            document.getElementById('stat-sitemap').textContent = sm;
+          }
+
+          if (status === 'fetching_sitemap') {
+            document.getElementById('progress-title').textContent = 'Fetching sitemap...';
+          } else if (status === 'no_sitemap') {
+            document.getElementById('progress-title').textContent = 'No sitemap found — analysing homepage...';
+          } else if (status === 'analysing') {
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-title').textContent = `Analysing pages... (${done}/${total})`;
+            document.getElementById('progress-sub').textContent = pct + '%';
+          }
+
+          if (status === 'complete' || (done > 0 && done % 5 === 0)) {
+            loadResults(status === 'complete');
+          }
+
+          if (status === 'complete' || status === 'error') {
+            clearInterval(pollInterval);
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('analyse-btn').disabled = false;
+            document.getElementById('progress-bar').style.width = '100%';
+            document.getElementById('progress-title').textContent =
+              status === 'error' ? '⚠ Analysis failed: ' + (data.error || 'unknown') : `✓ Analysis complete — ${done} pages`;
+            loadResults(true);
+          }
+        });
+    }
+
+    function loadResults(final) {
+      fetch(`/api/results?job_id=${encodeURIComponent(currentJobId)}`)
+        .then(r => r.json())
+        .then(data => {
+          allResults = data.results || [];
+          if (allResults.length > 0) {
+            document.getElementById('summary-section').style.display = 'block';
+            document.getElementById('results-section').style.display = 'block';
+            renderSummary();
+            renderTable();
+          }
+        });
+    }
+
+    function setFilter(f, btn) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderTable();
+    }
+
+    function renderSummary() {
+      const results = allResults;
+      const avgScore = results.length ? Math.round(results.reduce((s, r) => s + (r.score || 0), 0) / results.length) : 0;
+      const noTitle = results.filter(r => !r.title).length;
+      const noDesc = results.filter(r => !r.meta_description).length;
+      const noH1 = results.filter(r => !(r.headings?.h1?.length)).length;
+      const totalImages = results.reduce((s, r) => s + (r.image_stats?.total || 0), 0);
+      const missingAlt = results.reduce((s, r) => s + (r.image_stats?.missing_alt || 0), 0);
+      const slowPages = results.filter(r => r.load_time_ms > 2500).length;
+      const issuePages = results.filter(r => r.issues?.length > 0).length;
+
+      const scoreClass = avgScore >= 80 ? 'cv-green' : avgScore >= 60 ? 'cv-yellow' : 'cv-red';
+
+      document.getElementById('summary-cards').innerHTML = `
+    <div class="card">
+      <div class="card-val ${scoreClass}">${avgScore}</div>
+      <div class="card-lbl">Avg SEO Score</div>
+      <div class="card-sub">/100</div>
+    </div>
+    <div class="card">
+      <div class="card-val cv-blue">${results.length}</div>
+      <div class="card-lbl">Pages Analysed</div>
+    </div>
+    <div class="card">
+      <div class="card-val ${noTitle > 0 ? 'cv-red' : 'cv-green'}">${noTitle}</div>
+      <div class="card-lbl">Missing Title</div>
+    </div>
+    <div class="card">
+      <div class="card-val ${noDesc > 0 ? 'cv-yellow' : 'cv-green'}">${noDesc}</div>
+      <div class="card-lbl">Missing Meta Desc</div>
+    </div>
+    <div class="card">
+      <div class="card-val ${noH1 > 0 ? 'cv-yellow' : 'cv-green'}">${noH1}</div>
+      <div class="card-lbl">Missing H1</div>
+    </div>
+    <div class="card">
+      <div class="card-val cv-blue">${totalImages}</div>
+      <div class="card-lbl">Total Images</div>
+      <div class="card-sub">${missingAlt} missing alt</div>
+    </div>
+    <div class="card">
+      <div class="card-val ${slowPages > 0 ? 'cv-red' : 'cv-green'}">${slowPages}</div>
+      <div class="card-lbl">Slow Pages</div>
+      <div class="card-sub">>2500ms</div>
+    </div>
+    <div class="card">
+      <div class="card-val ${issuePages > 0 ? 'cv-red' : 'cv-green'}">${issuePages}</div>
+      <div class="card-lbl">Pages w/ Issues</div>
+    </div>
+  `;
+    }
+
+    function filterResults() {
+      const q = (document.getElementById('search-filter')?.value || '').toLowerCase();
+      return allResults.filter(r => {
+        if (q && !r.url.toLowerCase().includes(q)) return false;
+        if (currentFilter === 'issues') return r.issues?.length > 0;
+        if (currentFilter === 'warnings') return r.warnings?.length > 0;
+        if (currentFilter === 'good') return (r.score || 0) >= 80;
+        if (currentFilter === 'no_title') return !r.title;
+        if (currentFilter === 'no_desc') return !r.meta_description;
+        if (currentFilter === 'no_h1') return !(r.headings?.h1?.length);
+        if (currentFilter === 'img_issues') return (r.image_stats?.missing_alt || 0) > 0;
+        return true;
+      });
+    }
+
+    function renderTable() {
+      const filtered = filterResults();
+      const tbody = document.getElementById('results-body');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('empty-state').style.display = 'block';
+        return;
+      }
+      document.getElementById('empty-state').style.display = 'none';
+
+      let html = '';
+      filtered.forEach((r, i) => {
+        const rowId = 'row_' + i;
+        html += buildRow(r, rowId);
+        html += buildDetailRow(r, rowId);
+      });
+      tbody.innerHTML = html;
+    }
+
+    function buildRow(r, rowId) {
+      const score = r.score || 0;
+      let scoreClass = score >= 80 ? 'score-a' : score >= 60 ? 'score-b' : score >= 40 ? 'score-c' : 'score-d';
+      const statusPill = r.status_code === 200 ? `<span class="pill pill-green">${r.status_code}</span>`
+        : r.status_code >= 300 && r.status_code < 400 ? `<span class="pill pill-yellow">${r.status_code}</span>`
+          : r.status_code > 0 ? `<span class="pill pill-red">${r.status_code}</span>`
+            : `<span class="pill pill-gray">ERR</span>`;
+
+      const tlLen = r.title_length || 0;
+      const tlPill = !r.title ? `<span class="pill pill-red">missing</span>`
+        : tlLen < 10 || tlLen > 70 ? `<span class="pill pill-yellow">${tlLen}</span>`
+          : `<span class="pill pill-green">${tlLen}</span>`;
+
+      const mdLen = r.meta_description_length || 0;
+      const mdPill = !r.meta_description ? `<span class="pill pill-red">missing</span>`
+        : mdLen < 50 || mdLen > 165 ? `<span class="pill pill-yellow">${mdLen}</span>`
+          : `<span class="pill pill-green">${mdLen}</span>`;
+
+      const h1s = r.headings?.h1 || [];
+      const h1Pill = h1s.length === 0 ? `<span class="pill pill-red">0</span>`
+        : h1s.length > 1 ? `<span class="pill pill-yellow">${h1s.length}</span>`
+          : `<span class="pill pill-green">1</span>`;
+
+      const h2Count = r.headings?.h2?.length || 0;
+      const h3Count = r.headings?.h3?.length || 0;
+
+      const imgMissAlt = r.image_stats?.missing_alt || 0;
+      const imgTotal = r.image_stats?.total || 0;
+      const imgPill = imgMissAlt > 0 ? `<span class="pill pill-yellow">${imgMissAlt}/${imgTotal}</span>`
+        : `<span class="pill pill-green">${imgTotal}</span>`;
+
+      const loadMs = r.load_time_ms || 0;
+      const speedPill = loadMs > 2500 ? `<span class="pill pill-red">${loadMs}</span>`
+        : loadMs > 1000 ? `<span class="pill pill-yellow">${loadMs}</span>`
+          : `<span class="pill pill-green">${loadMs}</span>`;
+
+      const issueCount = r.issues?.length || 0;
+      const warnCount = r.warnings?.length || 0;
+      const issuePill = issueCount > 0 ? `<span class="pill pill-red">${issueCount}</span>` : `<span class="pill pill-gray">0</span>`;
+      const warnPill = warnCount > 0 ? `<span class="pill pill-yellow">${warnCount}</span>` : `<span class="pill pill-gray">0</span>`;
+
+      const titleDisplay = r.title ? escHtml(r.title.substring(0, 40)) + (r.title.length > 40 ? '…' : '') : '—';
+      const descDisplay = r.meta_description ? escHtml(r.meta_description.substring(0, 50)) + (r.meta_description.length > 50 ? '…' : '') : '—';
+
+      const shortUrl = r.url.replace(/^https?:\/\/[^\/]+/, '') || '/';
+
+      return `<tr>
+    <td><button class="expand-btn" onclick="toggleDetail('${rowId}')" id="btn_${rowId}">+</button></td>
+    <td class="url-cell"><a href="${escHtml(r.url)}" target="_blank" title="${escHtml(r.url)}">${escHtml(shortUrl.substring(0, 60))}${shortUrl.length > 60 ? '…' : ''}</a></td>
+    <td><div class="score-badge ${scoreClass}">${score}</div></td>
+    <td>${statusPill}</td>
+    <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.title || '')}">${titleDisplay}</td>
+    <td>${tlPill}</td>
+    <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.meta_description || '')}">${descDisplay}</td>
+    <td>${mdPill}</td>
+    <td>${h1Pill}</td>
+    <td><span class="pill ${h2Count > 0 ? 'pill-blue' : 'pill-gray'}">${h2Count}</span></td>
+    <td><span class="pill pill-gray">${h3Count}</span></td>
+    <td>${imgPill}</td>
+    <td><span class="pill ${imgMissAlt > 0 ? 'pill-yellow' : 'pill-green'}">${imgMissAlt}</span></td>
+    <td><span class="pill pill-gray">${r.word_count || 0}</span></td>
+    <td>${speedPill}</td>
+    <td>${issuePill}</td>
+    <td>${warnPill}</td>
+  </tr>`;
+    }
+
+    function buildDetailRow(r, rowId) {
+      // Headings tree
+      let headingsHtml = '';
+      const hTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+      hTags.forEach(tag => {
+        const items = r.headings?.[tag] || [];
+        items.forEach(text => {
+          const indent = '  '.repeat(parseInt(tag[1]) - 1);
+          headingsHtml += `<div class="h-item"><span class="h-tag ${tag}t">${indent}&lt;${tag}&gt;</span><span class="h-text">${escHtml(text.substring(0, 80))}${text.length > 80 ? '…' : ''}</span></div>`;
+        });
+      });
+      if (!headingsHtml) headingsHtml = '<span style="color:var(--muted)">No headings found</span>';
+
+      // Images
+      let imagesHtml = '';
+      const imgs = r.images || [];
+      if (imgs.length === 0) {
+        imagesHtml = '<span style="color:var(--muted)">No images found</span>';
+      } else {
+        imgs.slice(0, 15).forEach(img => {
+          const tips = [];
+          if (!img.has_alt) tips.push(`<span class="pill pill-red">missing alt</span>`);
+          if (!img.has_dimensions) tips.push(`<span class="pill pill-yellow">no dimensions</span>`);
+          if (!img.lazy_loaded) tips.push(`<span class="pill pill-yellow">not lazy</span>`);
+          if (!img.is_modern_format) tips.push(`<span class="pill pill-yellow">use webp/avif</span>`);
+          imagesHtml += `<div class="img-item">
+        <div class="img-filename">${escHtml(img.filename || img.src.substring(0, 50))}</div>
+        ${img.has_alt ? `<div style="color:var(--muted);font-size:10px">alt: "${escHtml(img.alt?.substring(0, 60) || '')}"</div>` : ''}
+        <div class="img-issues">${tips.join('')}</div>
+      </div>`;
+        });
+        if (imgs.length > 15) imagesHtml += `<div style="color:var(--muted);font-size:11px;margin-top:6px">... and ${imgs.length - 15} more images</div>`;
+      }
+
+      // Image optimisation tips
+      const imgStats = r.image_stats || {};
+      const imgTipsHtml = buildImageTips(imgStats, imgs);
+
+      // Issues/warnings/passed
+      let issuesHtml = '<div class="issues-list">';
+      (r.issues || []).forEach(i => {
+        issuesHtml += `<div class="issue-item err"><div class="issue-dot dot-err"></div><div>${escHtml(i.msg)}</div></div>`;
+      });
+      (r.warnings || []).forEach(w => {
+        issuesHtml += `<div class="issue-item warn"><div class="issue-dot dot-warn"></div><div>${escHtml(w.msg)}</div></div>`;
+      });
+      (r.passed || []).forEach(p => {
+        issuesHtml += `<div class="issue-item ok"><div class="issue-dot dot-ok"></div><div>${escHtml(p.msg)}</div></div>`;
+      });
+      if (!(r.issues?.length) && !(r.warnings?.length) && !(r.passed?.length)) {
+        issuesHtml += `<span style="color:var(--muted)">No data</span>`;
+      }
+      issuesHtml += '</div>';
+
+      // OG Tags
+      const og = r.og_tags || {};
+      let ogHtml = '';
+      if (Object.keys(og).length === 0) {
+        ogHtml = '<span style="color:var(--red);font-size:11px">No Open Graph tags found</span>';
+      } else {
+        Object.entries(og).forEach(([k, v]) => {
+          ogHtml += `<div class="detail-row-item"><span class="dri-label">${escHtml(k)}</span><span class="dri-val">${escHtml(String(v).substring(0, 60))}</span></div>`;
+        });
+      }
+
+      // Links
+      const ls = r.link_stats || {};
+      const linksHtml = `
+    <div class="bar-row"><span class="bar-label">Internal</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(100, ls.internal || 0)}%;background:var(--blue)"></div></div><span class="bar-val">${ls.internal || 0}</span></div>
+    <div class="bar-row"><span class="bar-label">External</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(100, (ls.external || 0) * 2)}%;background:var(--cyan)"></div></div><span class="bar-val">${ls.external || 0}</span></div>
+    <div class="bar-row"><span class="bar-label">Nofollow</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(100, (ls.nofollow || 0) * 3)}%;background:var(--muted)"></div></div><span class="bar-val">${ls.nofollow || 0}</span></div>
+  `;
+
+      return `<tr class="detail-row" id="${rowId}">
+    <td colspan="17">
+      <div class="detail-content">
+        <div class="detail-grid">
+
+          <!-- Meta Info -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">📋 Meta Information</div>
+            <div class="detail-block-body">
+              <div class="detail-row-item"><span class="dri-label">Title</span><span class="dri-val">${escHtml(r.title || '—')}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Title length</span><span class="dri-val">${r.title_length || 0} chars <span style="color:var(--muted)">(ideal: 50–60)</span></span></div>
+              <div class="detail-row-item"><span class="dri-label">Meta desc</span><span class="dri-val">${escHtml((r.meta_description || '—').substring(0, 80))}${(r.meta_description?.length || 0) > 80 ? '…' : ''}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Desc length</span><span class="dri-val">${r.meta_description_length || 0} chars <span style="color:var(--muted)">(ideal: 120–160)</span></span></div>
+              <div class="detail-row-item"><span class="dri-label">Keywords</span><span class="dri-val">${escHtml(r.meta_keywords || '—')}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Canonical</span><span class="dri-val">${escHtml(r.canonical || '—')}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Robots</span><span class="dri-val">${escHtml(r.robots_meta || '—')}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Viewport</span><span class="dri-val">${escHtml(r.meta_viewport || '—')}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Load time</span><span class="dri-val" style="color:${r.load_time_ms > 2500 ? 'var(--red)' : r.load_time_ms > 1000 ? 'var(--yellow)' : 'var(--green)'}">${r.load_time_ms}ms</span></div>
+              <div class="detail-row-item"><span class="dri-label">Page size</span><span class="dri-val">${((r.page_size_bytes || 0) / 1024).toFixed(1)} KB</span></div>
+              <div class="detail-row-item"><span class="dri-label">Word count</span><span class="dri-val">${r.word_count || 0}</span></div>
+              <div class="detail-row-item"><span class="dri-label">HTTPS</span><span class="dri-val" style="color:${r.has_https ? 'var(--green)' : 'var(--red)'}">${r.has_https ? '✓ Yes' : '✗ No'}</span></div>
+            </div>
+          </div>
+
+          <!-- Issues + Passed -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">⚡ SEO Checks</div>
+            <div class="detail-block-body">${issuesHtml}</div>
+          </div>
+
+          <!-- Headings -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">📝 Heading Structure</div>
+            <div class="detail-block-body">
+              <div class="headings-tree">${headingsHtml}</div>
+            </div>
+          </div>
+
+          <!-- Images -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">🖼 Images (${(r.images || []).length} total)</div>
+            <div class="detail-block-body">${imagesHtml}${imgTipsHtml}</div>
+          </div>
+
+          <!-- Open Graph -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">📣 Open Graph / Social</div>
+            <div class="detail-block-body">${ogHtml}</div>
+          </div>
+
+          <!-- Links -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">🔗 Links (${r.link_stats?.total || 0} total)</div>
+            <div class="detail-block-body">${linksHtml}</div>
+          </div>
+
+          <!-- Security Headers -->
+          <div class="detail-block">
+            <div class="detail-block-hdr">🔒 Security Headers</div>
+            <div class="detail-block-body">
+              <div class="detail-row-item"><span class="dri-label">HSTS</span><span class="dri-val" style="color:${r.strict_transport_security ? 'var(--green)' : 'var(--red)'}">${r.strict_transport_security ? '✓ Present' : '✗ Missing'}</span></div>
+              <div class="detail-row-item"><span class="dri-label">CSP</span><span class="dri-val" style="color:${r.content_security ? 'var(--green)' : 'var(--yellow)'}">${r.content_security ? '✓ Present' : '⚠ Missing'}</span></div>
+              <div class="detail-row-item"><span class="dri-label">X-Frame-Options</span><span class="dri-val" style="color:${r.x_frame_options ? 'var(--green)' : 'var(--yellow)'}">${r.x_frame_options ? '✓ ' + escHtml(r.x_frame_options) : '⚠ Missing'}</span></div>
+              <div class="detail-row-item"><span class="dri-label">X-Content-Type</span><span class="dri-val" style="color:${r.x_content_type_options ? 'var(--green)' : 'var(--yellow)'}">${r.x_content_type_options ? '✓ ' + escHtml(r.x_content_type_options) : '⚠ Missing'}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Referrer-Policy</span><span class="dri-val" style="color:${r.referrer_policy ? 'var(--green)' : 'var(--muted)'}">${r.referrer_policy ? '✓ ' + escHtml(r.referrer_policy) : 'Not set'}</span></div>
+              <div class="detail-row-item"><span class="dri-label">Permissions-Policy</span><span class="dri-val" style="color:${r.permissions_policy ? 'var(--green)' : 'var(--muted)'}">${r.permissions_policy ? '✓ Present' : 'Not set'}</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </td>
+  </tr>`;
+    }
+
+    function buildImageTips(imgStats, imgs) {
+      const tips = [];
+      if (imgStats.missing_alt > 0) {
+        tips.push(`<strong>Add alt text</strong> to ${imgStats.missing_alt} image(s). Describe the image content for accessibility and search.`);
+      }
+      if (imgStats.not_lazy > 0) {
+        tips.push(`<strong>Add loading="lazy"</strong> to below-fold images to improve page speed.`);
+      }
+      if (imgStats.not_modern_format > 0) {
+        const count = imgStats.not_modern_format;
+        tips.push(`<strong>Convert ${count} image(s) to WebP or AVIF</strong> format — typically 25–50% smaller file size vs JPEG/PNG.`);
+      }
+      if (imgStats.missing_dimensions > 0) {
+        tips.push(`<strong>Add width and height attributes</strong> to ${imgStats.missing_dimensions} image(s) to prevent layout shift (CLS).`);
+      }
+      if (tips.length === 0) return '';
+      return `<div class="optimize-tip">
+    <strong>💡 Image Optimisation Tips:</strong><br>
+    ${tips.join('<br>')}
+  </div>`;
+    }
+
+    function toggleDetail(rowId) {
+      const row = document.getElementById(rowId);
+      const btn = document.getElementById('btn_' + rowId);
+      if (row.classList.contains('open')) {
+        row.classList.remove('open');
+        btn.textContent = '+';
+      } else {
+        row.classList.add('open');
+        btn.textContent = '−';
+      }
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && document.activeElement.id === 'domain-input') {
+        startAnalysis();
+      }
+    });
+
+    function downloadBlob(content, filename, contentType) {
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 0);
+    }
+
+    function downloadSummaryJSON() {
+      if (!allResults || allResults.length === 0) return;
+      const json = JSON.stringify(allResults, null, 2);
+      downloadBlob(json, `seo_audit_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+    }
+
+    function downloadSummaryCSV() {
+      if (!allResults || allResults.length === 0) return;
+      const headers = [
+        "URL", "Score", "Status", "Title", "Title Length", "Meta Description",
+        "Desc Length", "H1 Count", "H2 Count", "Images", "Missing Alt",
+        "Load Time (ms)", "Word Count", "Issues", "Warnings", "HTTPS", "Canonical"
+      ];
+      
+      const rows = allResults.map(r => [
+        `"${(r.url || "").replace(/"/g, '""')}"`,
+        r.score || 0,
+        r.status_code || "",
+        `"${(r.title || "").replace(/"/g, '""')}"`,
+        r.title_length || 0,
+        `"${(r.meta_description || "").replace(/"/g, '""')}"`,
+        r.meta_description_length || 0,
+        r.headings?.h1?.length || 0,
+        r.headings?.h2?.length || 0,
+        r.image_stats?.total || 0,
+        r.image_stats?.missing_alt || 0,
+        r.load_time_ms || 0,
+        r.word_count || 0,
+        r.issues?.length || 0,
+        r.warnings?.length || 0,
+        r.has_https ? "Yes" : "No",
+        `"${(r.canonical || "").replace(/"/g, '""')}"`
+      ]);
+
+      const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      downloadBlob(csvContent, `seo_audit_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+    }
+
+    function downloadSummaryExcel() {
+      if (!allResults || allResults.length === 0) return;
+      if (typeof XLSX === 'undefined') {
+        alert("Excel export library is still loading. Please try again in a moment.");
+        return;
+      }
+
+      // Define colors matching your CSS variables
+      const colors = {
+        bg: "0f1117",
+        s1: "161920",
+        s2: "1c1f28",
+        border: "2a2e3d",
+        text: "e2e5f1",
+        muted: "5a6080",
+        green: "22c55e",
+        yellow: "f59e0b",
+        red: "ef4444",
+        blue: "3b82f6",
+        purple: "a855f7",
+        cyan: "06b6d4"
+      };
+
+      const headers = [
+        "URL", "Score", "Status", "Title", "Title Length", "Meta Description",
+        "Desc Length", "H1 Count", "H2 Count", "Images", "Missing Alt",
+        "Load Time (ms)", "Word Count", "Issues", "Warnings", "HTTPS", "Canonical"
+      ];
+
+      const rows = allResults.map(r => [
+        r.url || "",
+        r.score || 0,
+        r.status_code || "",
+        r.title || "",
+        r.title_length || 0,
+        r.meta_description || "",
+        r.meta_description_length || 0,
+        r.headings?.h1?.length || 0,
+        r.headings?.h2?.length || 0,
+        r.image_stats?.total || 0,
+        r.image_stats?.missing_alt || 0,
+        r.load_time_ms || 0,
+        r.word_count || 0,
+        r.issues?.length || 0,
+        r.warnings?.length || 0,
+        r.has_https ? "Yes" : "No",
+        r.canonical || ""
+      ]);
+
+      // Create worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+      // Set column widths
+      worksheet["!cols"] = [
+        { wch: 50 }, // URL
+        { wch: 8 },  // Score
+        { wch: 8 },  // Status
+        { wch: 40 }, // Title
+        { wch: 12 }, // Title Length
+        { wch: 50 }, // Meta Description
+        { wch: 12 }, // Desc Length
+        { wch: 10 }, // H1
+        { wch: 10 }, // H2
+        { wch: 8 },  // Images
+        { wch: 12 }, // Missing Alt
+        { wch: 14 }, // Load Time
+        { wch: 12 }, // Word Count
+        { wch: 8 },  // Issues
+        { wch: 10 }, // Warnings
+        { wch: 8 },  // HTTPS
+        { wch: 50 }  // Canonical
+      ];
+
+      // Apply styles to header row
+      const range = XLSX.utils.decode_range(worksheet["!ref"]);
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!worksheet[cellRef]) continue;
+
+        worksheet[cellRef].s = {
+          font: { bold: true, color: { rgb: colors.text }, sz: 11 },
+          fill: { fgColor: { rgb: colors.s2 }, patternType: "solid" },
+          border: {
+            bottom: { style: "thin", color: { rgb: colors.border } }
+          },
+          alignment: { vertical: "center", horizontal: "left" }
+        };
+      }
+
+      // Apply data row styles with conditional coloring
+      for (let row = 1; row <= range.e.r; row++) {
+        const result = allResults[row - 1];
+        const score = result.score || 0;
+
+        // Determine row background based on score
+        let rowBg = colors.s1;
+        if (score >= 80) rowBg = "0a1f0a";      // Dark green tint
+        else if (score >= 60) rowBg = "1a1f0a"; // Dark yellow tint
+        else if (score >= 40) rowBg = "1f1a0a"; // Dark orange tint
+        else rowBg = "1f0a0a";                   // Dark red tint
+
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellRef]) continue;
+
+          const baseStyle = {
+            font: { color: { rgb: colors.text }, sz: 10 },
+            fill: { fgColor: { rgb: rowBg }, patternType: "solid" },
+            alignment: { vertical: "center", wrapText: true }
+          };
+
+          // Score column - colored based on value
+          if (col === 1) {
+            let scoreColor = colors.red;
+            if (score >= 80) scoreColor = colors.green;
+            else if (score >= 60) scoreColor = colors.cyan;
+            else if (score >= 40) scoreColor = colors.yellow;
+
+            baseStyle.font = {
+              bold: true,
+              color: { rgb: scoreColor },
+              sz: 11
+            };
+            baseStyle.fill = {
+              fgColor: { rgb: scoreColor + "20" }, // 20 = 12% opacity
+              patternType: "solid"
+            };
+          }
+
+          // Status column - colored pills
+          if (col === 2) {
+            const status = result.status_code;
+            let statusColor = colors.red;
+            let statusBg = colors.red + "20";
+            if (status === 200) {
+              statusColor = colors.green;
+              statusBg = colors.green + "20";
+            } else if (status >= 300 && status < 400) {
+              statusColor = colors.yellow;
+              statusBg = colors.yellow + "20";
+            }
+            baseStyle.font = { bold: true, color: { rgb: statusColor }, sz: 10 };
+            baseStyle.fill = { fgColor: { rgb: statusBg }, patternType: "solid" };
+          }
+
+          // Title Length - colored based on ideal range
+          if (col === 4) {
+            const tl = result.title_length || 0;
+            if (!result.title) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (tl < 10 || tl > 70) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // Desc Length - colored
+          if (col === 6) {
+            const dl = result.meta_description_length || 0;
+            if (!result.meta_description) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (dl < 50 || dl > 165) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // H1 Count - colored
+          if (col === 7) {
+            const h1Count = result.headings?.h1?.length || 0;
+            if (h1Count === 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (h1Count > 1) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // Missing Alt - colored
+          if (col === 10) {
+            const missing = result.image_stats?.missing_alt || 0;
+            const total = result.image_stats?.total || 0;
+            if (missing === 0 && total > 0) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else if (missing > 0 && missing < total) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else if (missing > 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Load Time - colored
+          if (col === 11) {
+            const load = result.load_time_ms || 0;
+            if (load < 1000) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else if (load < 2500) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Issues count - red if any
+          if (col === 13) {
+            const issues = result.issues?.length || 0;
+            if (issues > 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Warnings count - yellow if any
+          if (col === 14) {
+            const warns = result.warnings?.length || 0;
+            if (warns > 0) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            }
+          }
+
+          // HTTPS - colored
+          if (col === 15) {
+            if (result.has_https) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          worksheet[cellRef].s = baseStyle;
+        }
+      }
+
+      // Add alternating row borders for readability
+      for (let row = 1; row <= range.e.r; row++) {
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellRef]) continue;
+          if (!worksheet[cellRef].s) worksheet[cellRef].s = {};
+          if (!worksheet[cellRef].s.border) {
+            worksheet[cellRef].s.border = {
+              bottom: { style: "hair", color: { rgb: colors.border + "80" } }
+            };
+          }
+        }
+      }
+
+      // Freeze header row
+      worksheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft" };
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "SEO Audit");
+
+      // Add a second sheet with issue details
+      const issueHeaders = ["URL", "Issue Type", "Message", "Points"];
+      const issueRows = [];
+      allResults.forEach(r => {
+        (r.issues || []).forEach(i => issueRows.push([r.url, "Error", i.msg, i.points || 0]));
+        (r.warnings || []).forEach(w => issueRows.push([r.url, "Warning", w.msg, w.points || 0]));
+        (r.passed || []).forEach(p => issueRows.push([r.url, "Passed", p.msg, p.points || 0]));
+      });
+
+      if (issueRows.length > 0) {
+        const issueSheet = XLSX.utils.aoa_to_sheet([issueHeaders, ...issueRows]);
+        issueSheet["!cols"] = [{ wch: 50 }, { wch: 12 }, { wch: 80 }, { wch: 10 }];
+
+        // Style issue sheet
+        const issueRange = XLSX.utils.decode_range(issueSheet["!ref"]);
+        for (let col = 0; col <= issueRange.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+          if (!issueSheet[cellRef]) continue;
+          issueSheet[cellRef].s = {
+            font: { bold: true, color: { rgb: colors.text }, sz: 11 },
+            fill: { fgColor: { rgb: colors.s2 }, patternType: "solid" }
+          };
+        }
+
+        // Color issue types
+        for (let row = 1; row <= issueRange.e.r; row++) {
+          const typeCell = XLSX.utils.encode_cell({ r: row, c: 1 });
+          if (!issueSheet[typeCell]) continue;
+
+          const type = issueSheet[typeCell].v;
+          let typeColor = colors.muted;
+          if (type === "Error") typeColor = colors.red;
+          else if (type === "Warning") typeColor = colors.yellow;
+          else if (type === "Passed") typeColor = colors.green;
+
+          issueSheet[typeCell].s = {
+            font: { bold: true, color: { rgb: typeColor }, sz: 10 },
+            fill: { fgColor: { rgb: typeColor + "15" }, patternType: "solid" },
+            alignment: { horizontal: "center" }
+          };
+        }
+
+        XLSX.utils.book_append_sheet(workbook, issueSheet, "Issues & Checks");
+      }
+
+      XLSX.writeFile(workbook, `seo_audit_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+  </script>
+</body>
+
+</html>
+
+
