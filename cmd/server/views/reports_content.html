@@ -1,0 +1,130 @@
+{{define "content"}}
+  <!-- PAGE HEADER -->
+  <section class="border-b border-white/10">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 pt-10 pb-8">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 class="text-2xl sm:text-[28px] font-extrabold text-slate-50 mb-1.5">Saved Reports</h1>
+          <p class="text-slate-400 text-sm">Every audit your clients have run, in one place.</p>
+        </div>
+        <a href="/seo-report"
+          class="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition whitespace-nowrap">+ New Audit</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORTS TABLE -->
+  <section class="max-w-[1400px] mx-auto px-6 lg:px-10 py-8">
+    <div id="reports-loading" class="text-center py-16 text-slate-400">Loading reports…</div>
+    <div id="reports-empty" class="hidden text-center py-16 px-5 text-slate-400">
+      <div class="text-4xl mb-3">📭</div>
+      <div class="text-base font-semibold text-slate-100 mb-1.5">No reports yet</div>
+      <div class="mb-5">Run your first audit and it'll show up here.</div>
+      <a href="/seo-report" class="inline-block px-4 py-2 text-sm font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">Run an audit</a>
+    </div>
+    <div id="reports-table-wrap" class="hidden border border-white/10 rounded-xl overflow-x-auto">
+      <table class="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th class="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap">Date</th>
+            <th class="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap">Site</th>
+            <th class="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap">Pages</th>
+            <th class="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap">Ranking</th>
+            <th class="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap">Action</th>
+          </tr>
+        </thead>
+        <tbody id="reports-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    let REPORTS = [];
+
+    const EYE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const DOWNLOAD_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+    function scoreBadgeClasses(score) {
+      if (score >= 80) return 'bg-emerald-500/10 border-emerald-400 text-emerald-400';
+      if (score >= 60) return 'bg-cyan-500/10 border-cyan-400 text-cyan-400';
+      if (score >= 40) return 'bg-amber-500/10 border-amber-400 text-amber-400';
+      return 'bg-red-500/10 border-red-400 text-red-400';
+    }
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function loadReports() {
+      try {
+        const res = await fetch('/api/reports');
+        const data = await res.json();
+        REPORTS = data.reports || [];
+      } catch (err) {
+        REPORTS = [];
+      }
+
+      document.getElementById('reports-loading').style.display = 'none';
+
+      if (REPORTS.length === 0) {
+        document.getElementById('reports-empty').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('reports-table-wrap').classList.remove('hidden');
+      renderReports();
+    }
+
+    function renderReports() {
+      const tbody = document.getElementById('reports-body');
+      const td = 'px-4 py-3.5 align-middle border-b border-white/10';
+
+      tbody.innerHTML = REPORTS.map(r => `
+        <tr class="hover:bg-slate-900/60 transition-colors">
+          <td class="${td} text-slate-300 whitespace-nowrap">${formatDate(r.created_at)}</td>
+          <td class="${td} font-mono text-[11px] text-slate-100">${escHtml(r.domain)}</td>
+          <td class="${td} text-slate-300">${r.pages_total}</td>
+          <td class="${td}"><div class="inline-flex items-center justify-center w-10 h-10 rounded-full font-extrabold text-[13px] border-2 ${scoreBadgeClasses(r.avg_score)}">${r.avg_score}</div></td>
+          <td class="${td}">
+            <div class="flex items-center gap-2">
+              <a href="/seo-report?job=${encodeURIComponent(r.job_id)}" title="View report"
+                class="inline-flex items-center justify-center w-8 h-8 bg-slate-900 border border-white/10 text-blue-400 rounded-lg hover:border-blue-500 transition">${EYE_ICON}</a>
+              <button onclick="downloadReport('${escHtml(r.job_id)}', '${escHtml(r.domain)}', '${r.created_at}')" title="Download report"
+                class="inline-flex items-center justify-center w-8 h-8 bg-slate-900 border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">${DOWNLOAD_ICON}</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function downloadReport(jobId, domain, createdAt) {
+      let results = [];
+      try {
+        const res = await fetch(`/api/results?job_id=${encodeURIComponent(jobId)}`);
+        const data = await res.json();
+        results = data.results || [];
+      } catch (err) {
+        alert('Failed to load report data.');
+        return;
+      }
+
+      const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${domain.replace(/[^a-z0-9.-]/gi, '_')}_${createdAt.slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 0);
+    }
+
+    loadReports();
+  </script>
+{{end}}

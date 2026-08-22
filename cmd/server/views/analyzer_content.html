@@ -1,0 +1,1348 @@
+{{define "content"}}
+  <!-- HERO -->
+  <section id="hero-section" class="relative overflow-hidden border-b border-white/10">
+    <div class="absolute -top-24 -left-24 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -top-24 -right-24 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-[1400px] mx-auto px-6 lg:px-10 pt-12 pb-10 flex flex-col items-center text-center">
+      <span class="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide mb-5">🔍 SEO Analyser</span>
+      <h1 class="text-[28px] sm:text-4xl lg:text-[42px] font-extrabold leading-[1.1] mb-2.5 text-slate-50">
+        Audit Your Website's <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">SEO Health</span>
+      </h1>
+      <p class="text-slate-400 text-sm max-w-xl mb-7">Enter a domain to crawl the sitemap, analyse every page, and get actionable SEO insights — title, meta, headings, images, speed, and more.</p>
+
+      <div class="flex flex-wrap justify-center gap-2.5 max-w-3xl w-full">
+        <input type="text" id="domain-input" placeholder="example.com or https://example.com" value=""
+          class="flex-1 min-w-[260px] bg-slate-900 border border-white/10 text-slate-100 placeholder-slate-500 px-4 py-3 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        <select id="max-pages" class="bg-slate-900 border border-white/10 text-slate-100 px-3.5 py-3 text-sm rounded-lg cursor-pointer outline-none focus:border-blue-500">
+          <option value="1">1 page (Exact URL)</option>
+          <option value="10">10 pages</option>
+          <option value="25">25 pages</option>
+          <option value="50" selected>50 pages</option>
+          <option value="100">100 pages</option>
+          <option value="200">200 pages</option>
+          <option value="500">500 pages</option>
+          <option value="1000">1000 pages</option>
+        </select>
+        <button id="analyse-btn" onclick="startAnalysis()"
+          class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-none whitespace-nowrap">Analyse Site</button>
+      </div>
+      <div class="mt-3 text-[11px] text-slate-500">
+        Fetches sitemap.xml → crawls pages → checks title, meta, headings, images, speed, links, Open Graph &amp; more
+      </div>
+    </div>
+  </section>
+
+  <!-- PROGRESS -->
+  <div id="progress-section" style="display:none;" class="border-b border-white/10 bg-slate-900/40">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div id="spinner" class="w-[18px] h-[18px] border-2 border-white/10 border-t-blue-500 rounded-full animate-spin"></div>
+        <div id="progress-title" class="text-[15px] font-semibold text-slate-100">Fetching sitemap...</div>
+        <div id="progress-sub" class="ml-auto text-xs text-slate-400"></div>
+      </div>
+      <div class="bg-slate-800 rounded h-1.5 overflow-hidden">
+        <div id="progress-bar" class="h-full w-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded transition-all duration-300"></div>
+      </div>
+      <div class="flex flex-wrap gap-6 mt-2.5 text-xs text-slate-400">
+        <div>Pages found: <span id="stat-total" class="text-slate-100 font-semibold">—</span></div>
+        <div>Analysed: <span id="stat-done" class="text-slate-100 font-semibold">0</span></div>
+        <div>Sitemap: <span id="stat-sitemap" class="text-slate-100 font-semibold">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div id="summary-section" class="border-b border-white/10">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <h2 class="text-base font-bold flex items-center gap-2">📊 Summary</h2>
+        <div class="flex gap-2">
+          <button onclick="downloadSummaryJSON()"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-transparent border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">📄 JSON</button>
+          <button onclick="downloadSummaryCSV()"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-transparent border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">📊 CSV</button>
+          <button onclick="downloadSummaryExcel()"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-transparent border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">📥 Excel</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="summary-cards"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div id="results-section" style="display:none;">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-8">
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          <span id="results-count"></span>
+          <label class="flex items-center gap-1.5">
+            Rows:
+            <select id="page-size-select" onchange="setPageSize(this.value)"
+              class="bg-slate-900 border border-white/10 text-slate-100 rounded-md px-1.5 py-1 text-xs outline-none focus:border-blue-500 cursor-pointer">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <button id="filter-toggle-btn" onclick="toggleFilterPanel()"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              <span id="filter-toggle-label">All pages</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div id="filter-panel" class="hidden absolute left-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-lg shadow-xl z-30 p-1.5"></div>
+          </div>
+          <div class="relative">
+            <button id="column-toggle-btn" onclick="toggleColumnPanel()"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+              Columns
+            </button>
+            <div id="column-panel" class="hidden absolute right-0 mt-2 w-56 bg-slate-900 border border-white/10 rounded-lg shadow-xl z-30 p-2 max-h-80 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+      <div class="border border-white/10 rounded-xl overflow-x-auto">
+        <table id="results-table" class="w-full border-collapse text-xs">
+          <thead id="results-thead"></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="empty-state" style="display:none;" class="text-center py-16 px-5 text-slate-400">
+        <div class="text-4xl mb-3">🔎</div>
+        <div class="text-base font-semibold text-slate-100 mb-1.5">No pages match this filter</div>
+        <div>Try a different filter or search term</div>
+      </div>
+      <div id="pagination-controls" class="flex items-center justify-center gap-1.5 mt-4"></div>
+    </div>
+  </div>
+
+  <!-- DETAIL PAGE (single-page view, reached via the eye icon) -->
+  <div id="detail-page-section" style="display:none;">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-8">
+      <a id="detail-back-link" href="/seo-report" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-blue-400 transition mb-5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to results
+      </a>
+      <div id="detail-page-body"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentJobId = null;
+    let allResults = [];
+    let currentFilter = 'all';
+    let pollInterval = null;
+
+    // ---- Data table config ---------------------------------------------------
+
+    const COLUMNS = [
+      { key: 'expand', label: '', alwaysVisible: true },
+      { key: 'url', label: 'Page URL', sortable: true, searchable: true, minWidth: '220px' },
+      { key: 'score', label: 'Score', sortable: true },
+      { key: 'status', label: 'Status', sortable: true, searchable: true },
+      { key: 'title', label: 'Title', sortable: true, searchable: true },
+      { key: 'title_length', label: 'Title Len', sortable: true },
+      { key: 'meta_description', label: 'Meta Desc', sortable: true, searchable: true },
+      { key: 'meta_description_length', label: 'Desc Len', sortable: true },
+      { key: 'h1', label: 'H1', sortable: true },
+      { key: 'h2', label: 'H2', sortable: true },
+      { key: 'h3', label: 'H3', sortable: true },
+      { key: 'images', label: 'Images', sortable: true },
+      { key: 'no_alt', label: 'No Alt', sortable: true },
+      { key: 'words', label: 'Words', sortable: true },
+      { key: 'load_ms', label: 'Load (ms)', sortable: true },
+      { key: 'issues', label: 'Issues', sortable: true },
+      { key: 'warns', label: 'Warns', sortable: true },
+    ];
+
+    let sortState = { key: null, dir: 'asc' };
+    let columnFilters = {};
+    let visibleCols = new Set(COLUMNS.filter(c => !c.alwaysVisible).map(c => c.key));
+    let currentPage = 1;
+    let pageSize = 25;
+
+    function sortValue(key, r) {
+      switch (key) {
+        case 'url': return (r.url || '').toLowerCase();
+        case 'score': return r.score || 0;
+        case 'status': return r.status_code || 0;
+        case 'title': return (r.title || '').toLowerCase();
+        case 'title_length': return r.title_length || 0;
+        case 'meta_description': return (r.meta_description || '').toLowerCase();
+        case 'meta_description_length': return r.meta_description_length || 0;
+        case 'h1': return r.headings?.h1?.length || 0;
+        case 'h2': return r.headings?.h2?.length || 0;
+        case 'h3': return r.headings?.h3?.length || 0;
+        case 'images': return r.image_stats?.total || 0;
+        case 'no_alt': return r.image_stats?.missing_alt || 0;
+        case 'words': return r.word_count || 0;
+        case 'load_ms': return r.load_time_ms || 0;
+        case 'issues': return r.issues?.length || 0;
+        case 'warns': return r.warnings?.length || 0;
+        default: return '';
+      }
+    }
+
+    const FILTER_OPTIONS = [
+      { key: 'all', label: 'All pages' },
+      { key: 'issues', label: 'Has Issues' },
+      { key: 'warnings', label: 'Has Warnings' },
+      { key: 'good', label: 'Score 80+' },
+      { key: 'no_title', label: 'No Title' },
+      { key: 'no_desc', label: 'No Description' },
+      { key: 'no_h1', label: 'No H1' },
+      { key: 'img_issues', label: 'Image Issues' },
+    ];
+
+    // ---- Tailwind style helpers -------------------------------------------------
+
+    const PILL_STYLES = {
+      green: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
+      yellow: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
+      red: 'bg-red-500/10 text-red-400 border-red-500/25',
+      blue: 'bg-blue-500/10 text-blue-400 border-blue-500/25',
+      gray: 'bg-slate-500/10 text-slate-400 border-slate-500/25',
+    };
+
+    function pill(color, text) {
+      return `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap border ${PILL_STYLES[color]}">${text}</span>`;
+    }
+
+    const EYE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+    function viewDetail(pageUrl) {
+      if (!currentJobId) return;
+      window.location.href = `/seo-report?job=${encodeURIComponent(currentJobId)}&page=${encodeURIComponent(pageUrl)}`;
+    }
+
+    // ---- Table header / column selector (built once, then mutated in place so
+    // sort clicks and column toggles never blow away focus in the filter inputs) ----
+
+    function renderTableHead() {
+      const cols = COLUMNS.filter(c => !c.alwaysVisible);
+      const thBase = 'sticky top-0 z-10 bg-slate-900 px-3.5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/10 whitespace-nowrap select-none';
+
+      const headerRow = `<tr>
+        <th data-col="expand" class="${thBase} w-10"></th>
+        ${cols.map(c => `<th data-col="${c.key}" class="${thBase} ${c.minWidth ? 'min-w-[' + c.minWidth + ']' : ''} ${c.sortable ? 'cursor-pointer hover:text-slate-100' : ''}" ${c.sortable ? `onclick="setSort('${c.key}')"` : ''}>
+          <span class="inline-flex items-center gap-1">${c.label}${c.sortable ? `<span id="sort-icon-${c.key}" class="text-slate-600">↕</span>` : ''}</span>
+        </th>`).join('')}
+      </tr>`;
+
+      const filterRow = `<tr>
+        <th data-col="expand" class="sticky top-[33px] z-10 bg-slate-900/95 px-3.5 py-1.5 border-b border-white/10"></th>
+        ${cols.map(c => `<th data-col="${c.key}" class="sticky top-[33px] z-10 bg-slate-900/95 px-2 py-1.5 border-b border-white/10">
+          ${c.searchable ? `<input type="text" oninput="setColumnFilter('${c.key}', this.value)" placeholder="Filter…" class="w-full min-w-[70px] bg-slate-950 border border-white/10 rounded px-1.5 py-1 text-[10px] text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500">` : ''}
+        </th>`).join('')}
+      </tr>`;
+
+      document.getElementById('results-thead').innerHTML = headerRow + filterRow;
+    }
+
+    function updateSortIcons() {
+      COLUMNS.forEach(c => {
+        if (!c.sortable) return;
+        const el = document.getElementById('sort-icon-' + c.key);
+        if (!el) return;
+        if (sortState.key === c.key) {
+          el.textContent = sortState.dir === 'asc' ? '↑' : '↓';
+          el.className = 'text-blue-400';
+        } else {
+          el.textContent = '↕';
+          el.className = 'text-slate-600';
+        }
+      });
+    }
+
+    function setSort(key) {
+      sortState = sortState.key === key
+        ? { key, dir: sortState.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      updateSortIcons();
+      renderTable();
+    }
+
+    function setColumnFilter(key, value) {
+      columnFilters[key] = value.trim().toLowerCase();
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderColumnPanel() {
+      const items = COLUMNS.filter(c => !c.alwaysVisible).map(c => `
+        <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-800 cursor-pointer text-xs text-slate-100">
+          <input type="checkbox" ${visibleCols.has(c.key) ? 'checked' : ''} onchange="toggleColumn('${c.key}', this.checked)" class="accent-blue-500">
+          ${c.label}
+        </label>`).join('');
+      document.getElementById('column-panel').innerHTML = `
+        <div class="flex items-center justify-between px-2 py-1 mb-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Show columns</span>
+          <button onclick="resetColumns()" class="text-[10px] text-blue-400 hover:underline">Reset</button>
+        </div>
+        ${items}`;
+    }
+
+    function toggleColumn(key, checked) {
+      if (checked) visibleCols.add(key); else visibleCols.delete(key);
+      applyColumnVisibility();
+    }
+
+    function resetColumns() {
+      visibleCols = new Set(COLUMNS.filter(c => !c.alwaysVisible).map(c => c.key));
+      renderColumnPanel();
+      applyColumnVisibility();
+    }
+
+    function applyColumnVisibility() {
+      COLUMNS.filter(c => !c.alwaysVisible).forEach(c => {
+        const visible = visibleCols.has(c.key);
+        document.querySelectorAll(`[data-col="${c.key}"]`).forEach(el => el.classList.toggle('hidden', !visible));
+      });
+    }
+
+    function toggleColumnPanel() {
+      document.getElementById('filter-panel').classList.add('hidden');
+      document.getElementById('column-panel').classList.toggle('hidden');
+    }
+
+    function renderFilterPanel() {
+      document.getElementById('filter-panel').innerHTML = FILTER_OPTIONS.map(f => `
+        <button onclick="setFilter('${f.key}')" class="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium transition ${f.key === currentFilter ? 'bg-blue-500/10 text-blue-400' : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'}">${f.label}</button>
+      `).join('');
+    }
+
+    function toggleFilterPanel() {
+      document.getElementById('column-panel').classList.add('hidden');
+      document.getElementById('filter-panel').classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('column-panel');
+      const btn = document.getElementById('column-toggle-btn');
+      if (panel && !panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) {
+        panel.classList.add('hidden');
+      }
+      const fpanel = document.getElementById('filter-panel');
+      const fbtn = document.getElementById('filter-toggle-btn');
+      if (fpanel && !fpanel.classList.contains('hidden') && !fpanel.contains(e.target) && !fbtn.contains(e.target)) {
+        fpanel.classList.add('hidden');
+      }
+    });
+
+    function scoreBadgeClasses(score) {
+      if (score >= 80) return 'bg-emerald-500/10 border-emerald-400 text-emerald-400';
+      if (score >= 60) return 'bg-cyan-500/10 border-cyan-400 text-cyan-400';
+      if (score >= 40) return 'bg-amber-500/10 border-amber-400 text-amber-400';
+      return 'bg-red-500/10 border-red-400 text-red-400';
+    }
+
+    function driRow(label, valueHtml) {
+      return `<div class="flex justify-between items-start py-1 border-b border-slate-800/60 text-[11px] gap-3 last:border-0"><span class="text-slate-400 shrink-0">${label}</span><span class="text-slate-100 text-right font-mono text-[10px] break-all">${valueHtml}</span></div>`;
+    }
+
+    function detailBlock(icon, title, bodyHtml) {
+      return `<div class="bg-slate-950/60 border border-white/10 rounded-lg overflow-hidden">
+        <div class="px-3.5 py-2.5 border-b border-white/10 text-[11px] font-bold text-slate-100 flex items-center gap-1.5">${icon} ${title}</div>
+        <div class="p-3.5">${bodyHtml}</div>
+      </div>`;
+    }
+
+    function calloutWarn(html) {
+      return `<div class="text-amber-400 text-[11px] leading-relaxed bg-amber-500/[0.07] border border-amber-500/20 rounded-md px-2.5 py-2">${html}</div>`;
+    }
+
+    // ---- Analysis lifecycle -------------------------------------------------
+
+    function startAnalysis() {
+      const domain = document.getElementById('domain-input').value.trim();
+      if (!domain) { alert('Please enter a domain name'); return; }
+
+      const maxPages = document.getElementById('max-pages').value;
+
+      // Reset UI
+      allResults = [];
+      sortState = { key: null, dir: 'asc' };
+      columnFilters = {};
+      document.querySelectorAll('#results-thead input[type="text"]').forEach(el => el.value = '');
+      updateSortIcons();
+      setFilter('all');
+      document.getElementById('results-body').innerHTML = '';
+      renderSummary();
+      document.getElementById('progress-bar').style.width = '0%';
+      document.getElementById('stat-total').textContent = '—';
+      document.getElementById('stat-done').textContent = '0';
+      document.getElementById('stat-sitemap').textContent = '—';
+
+      document.getElementById('progress-section').style.display = 'block';
+      document.getElementById('results-section').style.display = 'none';
+      document.getElementById('analyse-btn').disabled = true;
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('progress-title').textContent = 'Connecting...';
+
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+
+      const encodedDomain = encodeURIComponent(domain);
+      fetch(`/api/analyse?domain=${encodedDomain}&max_pages=${maxPages}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          currentJobId = data.job_id;
+          history.replaceState(null, '', '/seo-report?job=' + encodeURIComponent(currentJobId));
+          pollInterval = setInterval(pollStatus, 1000);
+          pollStatus(); // Call once immediately
+        })
+        .catch(err => {
+          document.getElementById('progress-title').textContent = '⚠ ' + err.message;
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('analyse-btn').disabled = false;
+        });
+    }
+
+    function pollStatus() {
+      if (!currentJobId) return;
+      fetch(`/api/status?job_id=${encodeURIComponent(currentJobId)}`)
+        .then(r => r.json())
+        .then(data => {
+          const total = data.total || 0;
+          const done = data.progress || 0;
+          const status = data.status;
+
+          // Update progress
+          document.getElementById('stat-total').textContent = total || '—';
+          document.getElementById('stat-done').textContent = done;
+          if (data.sitemap_url) {
+            const sm = data.sitemap_url.replace(/^https?:\/\/[^\/]+/, '');
+            document.getElementById('stat-sitemap').textContent = sm;
+          }
+
+          if (status === 'fetching_sitemap') {
+            document.getElementById('progress-title').textContent = 'Fetching sitemap...';
+          } else if (status === 'no_sitemap') {
+            document.getElementById('progress-title').textContent = 'No sitemap found — analysing homepage...';
+          } else if (status === 'analysing') {
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-title').textContent = `Analysing pages... (${done}/${total})`;
+            document.getElementById('progress-sub').textContent = pct + '%';
+          }
+
+          if (status === 'complete' || (done > 0 && done % 5 === 0)) {
+            loadResults(status === 'complete');
+          }
+
+          if (status === 'complete' || status === 'error') {
+            clearInterval(pollInterval);
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('analyse-btn').disabled = false;
+            document.getElementById('progress-bar').style.width = '100%';
+            document.getElementById('progress-title').textContent =
+              status === 'error' ? '⚠ Analysis failed: ' + (data.error || 'unknown') : `✓ Analysis complete — ${done} pages`;
+            loadResults(true);
+          }
+        });
+    }
+
+    function loadResults(final) {
+      fetch(`/api/results?job_id=${encodeURIComponent(currentJobId)}`)
+        .then(r => r.json())
+        .then(data => {
+          allResults = data.results || [];
+          if (allResults.length > 0) {
+            document.getElementById('summary-section').style.display = 'block';
+            document.getElementById('results-section').style.display = 'block';
+            renderSummary();
+            renderTable();
+          }
+        });
+    }
+
+    function setFilter(key) {
+      currentFilter = key;
+      const opt = FILTER_OPTIONS.find(f => f.key === key);
+      const label = document.getElementById('filter-toggle-label');
+      if (label) label.textContent = opt ? opt.label : 'Filter';
+      renderFilterPanel();
+      document.getElementById('filter-panel').classList.add('hidden');
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderSummary() {
+      const results = allResults;
+      const avgScore = results.length ? Math.round(results.reduce((s, r) => s + (r.score || 0), 0) / results.length) : 0;
+      const noTitle = results.filter(r => !r.title).length;
+      const noDesc = results.filter(r => !r.meta_description).length;
+      const noH1 = results.filter(r => !(r.headings?.h1?.length)).length;
+      const totalImages = results.reduce((s, r) => s + (r.image_stats?.total || 0), 0);
+      const missingAlt = results.reduce((s, r) => s + (r.image_stats?.missing_alt || 0), 0);
+      const slowPages = results.filter(r => r.load_time_ms > 2500).length;
+      const issuePages = results.filter(r => r.issues?.length > 0).length;
+      const withSchema = results.filter(r => (r.schema_types || []).length > 0).length;
+      const noOG = results.filter(r => !r.og_tags || Object.keys(r.og_tags).length === 0).length;
+
+      const scoreColor = avgScore >= 80 ? 'text-emerald-400' : avgScore >= 60 ? 'text-amber-400' : 'text-red-400';
+
+      const card = (value, color, label, sub) => `<div class="bg-slate-900 border border-white/10 rounded-lg px-4 py-4 hover:border-white/20 transition">
+        <div class="text-2xl font-extrabold leading-none ${color}">${value}</div>
+        <div class="text-[11px] text-slate-400 mt-1.5 font-medium">${label}</div>
+        ${sub ? `<div class="text-[10px] text-slate-400 mt-0.5">${sub}</div>` : ''}
+      </div>`;
+
+      document.getElementById('summary-cards').innerHTML = [
+        card(avgScore, scoreColor, 'Avg SEO Score', '/100'),
+        card(results.length, 'text-blue-400', 'Pages Analysed'),
+        card(noTitle, noTitle > 0 ? 'text-red-400' : 'text-emerald-400', 'Missing Title'),
+        card(noDesc, noDesc > 0 ? 'text-amber-400' : 'text-emerald-400', 'Missing Meta Desc'),
+        card(noH1, noH1 > 0 ? 'text-amber-400' : 'text-emerald-400', 'Missing H1'),
+        card(totalImages, 'text-blue-400', 'Total Images', `${missingAlt} missing alt`),
+        card(slowPages, slowPages > 0 ? 'text-red-400' : 'text-emerald-400', 'Slow Pages', '&gt;2500ms'),
+        card(issuePages, issuePages > 0 ? 'text-red-400' : 'text-emerald-400', 'Pages w/ Issues'),
+        card(withSchema, withSchema === results.length ? 'text-emerald-400' : withSchema > 0 ? 'text-amber-400' : 'text-red-400', 'Pages w/ Structured Data', `of ${results.length} — rich result eligibility`),
+        card(noOG, noOG > 0 ? 'text-red-400' : 'text-emerald-400', 'Missing Open Graph', 'bare social/Slack link previews'),
+      ].join('');
+    }
+
+    function filterResults() {
+      return allResults.filter(r => {
+        if (currentFilter === 'issues' && !(r.issues?.length > 0)) return false;
+        if (currentFilter === 'warnings' && !(r.warnings?.length > 0)) return false;
+        if (currentFilter === 'good' && !((r.score || 0) >= 80)) return false;
+        if (currentFilter === 'no_title' && r.title) return false;
+        if (currentFilter === 'no_desc' && r.meta_description) return false;
+        if (currentFilter === 'no_h1' && (r.headings?.h1?.length)) return false;
+        if (currentFilter === 'img_issues' && !((r.image_stats?.missing_alt || 0) > 0)) return false;
+        for (const c of COLUMNS) {
+          if (!c.searchable) continue;
+          const fv = columnFilters[c.key];
+          if (fv && !String(sortValue(c.key, r)).toLowerCase().includes(fv)) return false;
+        }
+        return true;
+      });
+    }
+
+    function sortResults(results) {
+      if (!sortState.key) return results;
+      const { key, dir } = sortState;
+      const sorted = [...results].sort((a, b) => {
+        const va = sortValue(key, a);
+        const vb = sortValue(key, b);
+        if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb));
+        return va - vb;
+      });
+      if (dir === 'desc') sorted.reverse();
+      return sorted;
+    }
+
+    function renderTable() {
+      const filtered = sortResults(filterResults());
+      const tbody = document.getElementById('results-body');
+      const countEl = document.getElementById('results-count');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('empty-state').style.display = 'block';
+        if (countEl) countEl.textContent = `0 of ${allResults.length} pages`;
+        renderPagination(0);
+        return;
+      }
+      document.getElementById('empty-state').style.display = 'none';
+
+      const size = pageSize === 'all' ? filtered.length : pageSize;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / size));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+      const start = (currentPage - 1) * size;
+      const pageItems = filtered.slice(start, start + size);
+
+      if (countEl) {
+        countEl.textContent = filtered.length === allResults.length
+          ? `Showing ${start + 1}–${start + pageItems.length} of ${filtered.length} pages`
+          : `Showing ${start + 1}–${start + pageItems.length} of ${filtered.length} (filtered from ${allResults.length})`;
+      }
+
+      tbody.innerHTML = pageItems.map(r => buildRow(r)).join('');
+      applyColumnVisibility();
+      renderPagination(filtered.length);
+    }
+
+    function setPageSize(value) {
+      pageSize = value === 'all' ? 'all' : parseInt(value, 10);
+      currentPage = 1;
+      renderTable();
+    }
+
+    function goToPage(p) {
+      currentPage = p;
+      renderTable();
+    }
+
+    function paginationRange(current, total) {
+      const delta = 1;
+      const range = [];
+      for (let i = 1; i <= total; i++) {
+        if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) {
+          range.push(i);
+        } else if (range[range.length - 1] !== '…') {
+          range.push('…');
+        }
+      }
+      return range;
+    }
+
+    function renderPagination(totalItems) {
+      const container = document.getElementById('pagination-controls');
+      if (!container) return;
+
+      const size = pageSize === 'all' ? totalItems : pageSize;
+      const totalPages = Math.max(1, Math.ceil(totalItems / size));
+
+      if (totalItems === 0 || pageSize === 'all' || totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const navBtn = 'px-2.5 py-1.5 text-xs font-semibold rounded-md border border-white/10 text-slate-300 hover:border-blue-500 hover:text-blue-400 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/10 disabled:hover:text-slate-300';
+
+      container.innerHTML = `
+        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="${navBtn}">Prev</button>
+        <div class="flex items-center gap-1">
+          ${paginationRange(currentPage, totalPages).map(p => p === '…'
+            ? `<span class="px-2 text-xs text-slate-500">…</span>`
+            : `<button onclick="goToPage(${p})" class="min-w-[28px] px-2 py-1.5 text-xs font-semibold rounded-md transition ${p === currentPage ? 'bg-blue-500/10 border border-blue-500 text-blue-400' : 'border border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-100'}">${p}</button>`
+          ).join('')}
+        </div>
+        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="${navBtn}">Next</button>
+      `;
+    }
+
+    function buildRow(r) {
+      const score = r.score || 0;
+      const scoreClass = scoreBadgeClasses(score);
+      const statusPill = r.status_code === 200 ? pill('green', r.status_code)
+        : r.status_code >= 300 && r.status_code < 400 ? pill('yellow', r.status_code)
+          : r.status_code > 0 ? pill('red', r.status_code)
+            : pill('gray', 'ERR');
+
+      const tlLen = r.title_length || 0;
+      const tlPill = !r.title ? pill('red', 'missing')
+        : tlLen < 10 || tlLen > 70 ? pill('yellow', tlLen)
+          : pill('green', tlLen);
+
+      const mdLen = r.meta_description_length || 0;
+      const mdPill = !r.meta_description ? pill('red', 'missing')
+        : mdLen < 50 || mdLen > 165 ? pill('yellow', mdLen)
+          : pill('green', mdLen);
+
+      const h1s = r.headings?.h1 || [];
+      const h1Pill = h1s.length === 0 ? pill('red', '0')
+        : h1s.length > 1 ? pill('yellow', h1s.length)
+          : pill('green', '1');
+
+      const h2Count = r.headings?.h2?.length || 0;
+      const h3Count = r.headings?.h3?.length || 0;
+
+      const imgMissAlt = r.image_stats?.missing_alt || 0;
+      const imgTotal = r.image_stats?.total || 0;
+      const imgPill = imgMissAlt > 0 ? pill('yellow', `${imgMissAlt}/${imgTotal}`) : pill('green', imgTotal);
+
+      const loadMs = r.load_time_ms || 0;
+      const speedPill = loadMs > 2500 ? pill('red', loadMs) : loadMs > 1000 ? pill('yellow', loadMs) : pill('green', loadMs);
+
+      const issueCount = r.issues?.length || 0;
+      const warnCount = r.warnings?.length || 0;
+      const issuePill = issueCount > 0 ? pill('red', issueCount) : pill('gray', '0');
+      const warnPill = warnCount > 0 ? pill('yellow', warnCount) : pill('gray', '0');
+
+      const titleDisplay = r.title ? escHtml(r.title.substring(0, 40)) + (r.title.length > 40 ? '…' : '') : '—';
+      const descDisplay = r.meta_description ? escHtml(r.meta_description.substring(0, 50)) + (r.meta_description.length > 50 ? '…' : '') : '—';
+
+      const shortUrl = r.url.replace(/^https?:\/\/[^\/]+/, '') || '/';
+      const td = 'px-3.5 py-2.5 align-top border-b border-white/10';
+
+      return `<tr class="hover:bg-slate-900/60 transition-colors">
+    <td data-col="expand" class="${td}"><button class="inline-flex items-center justify-center text-blue-400 hover:bg-slate-800 rounded-md w-7 h-7 transition-colors" onclick="viewDetail('${escHtml(r.url)}')" title="View full details">${EYE_ICON}</button></td>
+    <td data-col="url" class="${td} font-mono text-[11px] max-w-[280px] break-all"><a class="text-blue-400 hover:underline" href="${escHtml(r.url)}" target="_blank" title="${escHtml(r.url)}">${escHtml(shortUrl.substring(0, 60))}${shortUrl.length > 60 ? '…' : ''}</a></td>
+    <td data-col="score" class="${td}"><div class="inline-flex items-center justify-center w-10 h-10 rounded-full font-extrabold text-[13px] border-2 ${scoreClass}">${score}</div></td>
+    <td data-col="status" class="${td}">${statusPill}</td>
+    <td data-col="title" class="${td} max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title="${escHtml(r.title || '')}">${titleDisplay}</td>
+    <td data-col="title_length" class="${td}">${tlPill}</td>
+    <td data-col="meta_description" class="${td} max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title="${escHtml(r.meta_description || '')}">${descDisplay}</td>
+    <td data-col="meta_description_length" class="${td}">${mdPill}</td>
+    <td data-col="h1" class="${td}">${h1Pill}</td>
+    <td data-col="h2" class="${td}">${pill(h2Count > 0 ? 'blue' : 'gray', h2Count)}</td>
+    <td data-col="h3" class="${td}">${pill('gray', h3Count)}</td>
+    <td data-col="images" class="${td}">${imgPill}</td>
+    <td data-col="no_alt" class="${td}">${pill(imgMissAlt > 0 ? 'yellow' : 'green', imgMissAlt)}</td>
+    <td data-col="words" class="${td}">${pill('gray', r.word_count || 0)}</td>
+    <td data-col="load_ms" class="${td}">${speedPill}</td>
+    <td data-col="issues" class="${td}">${issuePill}</td>
+    <td data-col="warns" class="${td}">${warnPill}</td>
+  </tr>`;
+    }
+
+    function buildHeadingsHtml(r) {
+      let html = '';
+      const hTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+      const tagColor = { h1: 'text-blue-400', h2: 'text-cyan-400', h3: 'text-emerald-400', h4: 'text-slate-400', h5: 'text-slate-400', h6: 'text-slate-400' };
+      hTags.forEach(tag => {
+        const items = r.headings?.[tag] || [];
+        items.forEach(text => {
+          const indent = '&nbsp;&nbsp;'.repeat(parseInt(tag[1]) - 1);
+          html += `<div class="flex gap-2"><span class="font-bold shrink-0 ${tagColor[tag]}">${indent}&lt;${tag}&gt;</span><span class="text-slate-100 break-words">${escHtml(text.substring(0, 80))}${text.length > 80 ? '…' : ''}</span></div>`;
+        });
+      });
+      if (!html) html = '<span class="text-slate-400">No headings found</span>';
+      return html;
+    }
+
+    function buildImagesHtml(r) {
+      const imgs = r.images || [];
+      if (imgs.length === 0) return '<span class="text-slate-400">No images found</span>';
+      let html = '';
+      imgs.slice(0, 15).forEach(img => {
+        const tips = [];
+        if (!img.has_alt) tips.push(pill('red', 'missing alt'));
+        if (!img.has_dimensions) tips.push(pill('yellow', 'no dimensions'));
+        if (!img.lazy_loaded) tips.push(pill('yellow', 'not lazy'));
+        if (!img.is_modern_format) tips.push(pill('yellow', 'use webp/avif'));
+        html += `<div class="py-1.5 border-b border-white/10 text-[11px] last:border-0">
+        <div class="text-blue-400 font-mono break-all">${escHtml(img.filename || img.src.substring(0, 50))}</div>
+        ${img.has_alt ? `<div class="text-slate-400 text-[10px]">alt: "${escHtml(img.alt?.substring(0, 60) || '')}"</div>` : ''}
+        <div class="flex flex-wrap gap-1 mt-1">${tips.join('')}</div>
+      </div>`;
+      });
+      if (imgs.length > 15) html += `<div class="text-slate-400 text-[11px] mt-1.5">... and ${imgs.length - 15} more images</div>`;
+      return html;
+    }
+
+    function issueItem(type, msg) {
+      const styles = {
+        err: { box: 'bg-red-500/[0.07] border-red-500/20', dot: 'bg-red-400' },
+        warn: { box: 'bg-amber-500/[0.07] border-amber-500/20', dot: 'bg-amber-400' },
+        ok: { box: 'bg-emerald-500/[0.07] border-emerald-500/15', dot: 'bg-emerald-400' },
+      }[type];
+      return `<div class="flex items-start gap-2 px-2.5 py-1.5 rounded-md text-[11px] border ${styles.box}"><div class="w-1.5 h-1.5 rounded-full shrink-0 mt-[3px] ${styles.dot}"></div><div class="text-slate-100">${escHtml(msg)}</div></div>`;
+    }
+
+    function buildIssuesHtml(r) {
+      const rows = [];
+      (r.issues || []).forEach(i => rows.push(issueItem('err', i.msg)));
+      (r.warnings || []).forEach(w => rows.push(issueItem('warn', w.msg)));
+      (r.passed || []).forEach(p => rows.push(issueItem('ok', p.msg)));
+      if (rows.length === 0) return '<span class="text-slate-400">No data</span>';
+      return `<div class="flex flex-col gap-1.5">${rows.join('')}</div>`;
+    }
+
+    function buildOgHtml(r) {
+      const og = r.og_tags || {};
+      if (Object.keys(og).length === 0) return '<span class="text-red-400 text-[11px]">No Open Graph tags found</span>';
+      return Object.entries(og).map(([k, v]) => driRow(escHtml(k), escHtml(String(v).substring(0, 60)))).join('');
+    }
+
+    function buildLinksHtml(r) {
+      const ls = r.link_stats || {};
+      const barRow = (label, value, pct, color) => `
+    <div class="flex items-center gap-2 my-1">
+      <span class="text-[10px] text-slate-400 w-20 shrink-0">${label}</span>
+      <div class="flex-1 bg-slate-800 rounded h-[5px] overflow-hidden"><div class="h-full rounded" style="width:${pct}%;background:${color}"></div></div>
+      <span class="text-[10px] text-slate-100 w-8 text-right">${value}</span>
+    </div>`;
+      return barRow('Internal', ls.internal || 0, Math.min(100, ls.internal || 0), '#3b82f6')
+        + barRow('External', ls.external || 0, Math.min(100, (ls.external || 0) * 2), '#06b6d4')
+        + barRow('Nofollow', ls.nofollow || 0, Math.min(100, (ls.nofollow || 0) * 3), '#64748b');
+    }
+
+    function buildMetaInfoHtml(r) {
+      const loadColor = r.load_time_ms > 2500 ? '#f87171' : r.load_time_ms > 1000 ? '#f59e0b' : '#34d399';
+      return driRow('Title', escHtml(r.title || '—'))
+        + driRow('Title length', `${r.title_length || 0} chars <span class="text-slate-400">(ideal: 50–60)</span>`)
+        + driRow('Meta desc', escHtml((r.meta_description || '—').substring(0, 80)) + ((r.meta_description?.length || 0) > 80 ? '…' : ''))
+        + driRow('Desc length', `${r.meta_description_length || 0} chars <span class="text-slate-400">(ideal: 120–160)</span>`)
+        + driRow('Keywords', escHtml(r.meta_keywords || '—'))
+        + driRow('Canonical', escHtml(r.canonical || '—'))
+        + driRow('Robots', escHtml(r.robots_meta || '—'))
+        + driRow('Viewport', escHtml(r.meta_viewport || '—'))
+        + driRow('Load time', `<span style="color:${loadColor}">${r.load_time_ms}ms</span>`)
+        + driRow('Page size', `${((r.page_size_bytes || 0) / 1024).toFixed(1)} KB`)
+        + driRow('Word count', `${r.word_count || 0}`)
+        + driRow('HTTPS', `<span style="color:${r.has_https ? '#34d399' : '#f87171'}">${r.has_https ? '✓ Yes' : '✗ No'}</span>`);
+    }
+
+    function buildSecurityHtml(r) {
+      const c = (ok) => ok ? '#34d399' : '#f87171';
+      const cWarn = (ok) => ok ? '#34d399' : '#f59e0b';
+      const cMuted = (ok) => ok ? '#34d399' : '#8b8fa0';
+      return driRow('HSTS', `<span style="color:${c(r.strict_transport_security)}">${r.strict_transport_security ? '✓ Present' : '✗ Missing'}</span>`)
+        + driRow('CSP', `<span style="color:${cWarn(r.content_security)}">${r.content_security ? '✓ Present' : '⚠ Missing'}</span>`)
+        + driRow('X-Frame-Options', `<span style="color:${cWarn(r.x_frame_options)}">${r.x_frame_options ? '✓ ' + escHtml(r.x_frame_options) : '⚠ Missing'}</span>`)
+        + driRow('X-Content-Type', `<span style="color:${cWarn(r.x_content_type_options)}">${r.x_content_type_options ? '✓ ' + escHtml(r.x_content_type_options) : '⚠ Missing'}</span>`)
+        + driRow('Referrer-Policy', `<span style="color:${cMuted(r.referrer_policy)}">${r.referrer_policy ? '✓ ' + escHtml(r.referrer_policy) : 'Not set'}</span>`)
+        + driRow('Permissions-Policy', `<span style="color:${cMuted(r.permissions_policy)}">${r.permissions_policy ? '✓ Present' : 'Not set'}</span>`);
+    }
+
+    function buildDetailBlocksHtml(r) {
+      const headingsHtml = buildHeadingsHtml(r);
+      const imagesHtml = buildImagesHtml(r);
+      const imgTipsHtml = buildImageTips(r.image_stats || {}, r.images || []);
+      const issuesHtml = buildIssuesHtml(r);
+      const ogHtml = buildOgHtml(r);
+      const linksHtml = buildLinksHtml(r);
+
+      return [
+        detailBlock('📋', 'Meta Information', buildMetaInfoHtml(r)),
+        detailBlock('🔍', 'Google Search Preview', buildSerpPreview(r)),
+        detailBlock('💬', 'Social Share Preview', buildSocialCard(r)),
+        detailBlock('🏷', 'Structured Data (Schema.org)', buildSchemaBlock(r)),
+        detailBlock('⚡', 'SEO Checks', issuesHtml),
+        detailBlock('📝', 'Heading Structure', `<div class="font-mono text-[11px] leading-[1.9]">${headingsHtml}</div>`),
+        detailBlock('🖼', `Images (${(r.images || []).length} total)`, imagesHtml + imgTipsHtml),
+        detailBlock('📣', 'Open Graph / Social', ogHtml),
+        detailBlock('🔗', `Links (${r.link_stats?.total || 0} total)`, linksHtml),
+        detailBlock('🔒', 'Security Headers', buildSecurityHtml(r)),
+      ].join('');
+    }
+
+    function buildSerpPreview(r) {
+      const domain = (r.url.match(/^https?:\/\/([^\/]+)/) || ['', ''])[1];
+      const path = r.url.replace(/^https?:\/\/[^\/]+/, '') || '/';
+      const title = r.title ? escHtml(r.title) : '<span class="text-red-400">Untitled page — Google will use the H1 or URL instead</span>';
+      const desc = r.meta_description
+        ? escHtml(r.meta_description.substring(0, 160))
+        : '<span class="text-slate-400">No meta description — Google will auto-generate a snippet from page content.</span>';
+      return `<div class="font-sans">
+      <div class="flex items-center gap-2 text-xs mb-0.5">
+        <span class="w-4 h-4 rounded-full bg-slate-800 inline-flex items-center justify-center text-[9px] shrink-0">🌐</span>
+        <span class="text-slate-100">${escHtml(domain)}</span>
+        <span class="text-slate-400">${escHtml(path)}</span>
+      </div>
+      <div class="text-[15px] leading-tight my-0.5" style="color:#8ab4f8">${title}</div>
+      <div class="text-xs leading-relaxed" style="color:#bdc1c6">${desc}</div>
+    </div>`;
+    }
+
+    function buildSocialCard(r) {
+      const og = r.og_tags || {};
+      const domain = (r.url.match(/^https?:\/\/([^\/]+)/) || ['', ''])[1];
+      if (!og.image && !og.title && !og.description) {
+        return calloutWarn('⚠ No Open Graph tags found. Links shared on LinkedIn, X, Slack &amp; WhatsApp will show a bare, unbranded preview. Add og:title, og:description &amp; og:image.');
+      }
+      const title = og.title || r.title || 'Untitled';
+      const desc = og.description || r.meta_description || '';
+      const imgHtml = og.image
+        ? `<img class="w-full h-[110px] object-cover bg-slate-900 block" src="${escHtml(og.image)}" onerror="this.outerHTML='<div class=&quot;w-full h-[110px] flex items-center justify-center bg-slate-900 text-slate-400 text-[10px] text-center px-2&quot;>⚠ og:image URL set but failed to load</div>'">`
+        : `<div class="w-full h-[110px] flex items-center justify-center bg-slate-900 text-slate-400 text-[10px] text-center px-2">⚠ No og:image set — preview will show no thumbnail</div>`;
+      return `<div class="border border-white/10 rounded-lg overflow-hidden bg-slate-800">
+      ${imgHtml}
+      <div class="px-3 py-2.5 border-t border-white/10">
+        <div class="text-[10px] text-slate-400 uppercase tracking-wide">${escHtml(domain)}</div>
+        <div class="text-xs font-bold text-slate-100 my-0.5 leading-tight">${escHtml(String(title).substring(0, 70))}</div>
+        <div class="text-[11px] text-slate-400 leading-snug">${escHtml(String(desc).substring(0, 100))}</div>
+      </div>
+    </div>`;
+    }
+
+    function buildSchemaBlock(r) {
+      const types = r.schema_types || [];
+      if (types.length === 0) {
+        return calloutWarn('⚠ No structured data (JSON-LD) found. Adding Schema.org markup (Article, Product, FAQPage, BreadcrumbList, etc.) makes this page eligible for rich results — star ratings, FAQs, breadcrumbs — in Google Search.');
+      }
+      return `<div class="flex flex-wrap gap-1.5">${types.map(t => pill('blue', escHtml(t))).join('')}</div>`;
+    }
+
+    function buildImageTips(imgStats, imgs) {
+      const tips = [];
+      if (imgStats.missing_alt > 0) {
+        tips.push(`<strong class="text-blue-400">Add alt text</strong> to ${imgStats.missing_alt} image(s). Describe the image content for accessibility and search.`);
+      }
+      if (imgStats.not_lazy > 0) {
+        tips.push(`<strong class="text-blue-400">Add loading="lazy"</strong> to below-fold images to improve page speed.`);
+      }
+      if (imgStats.not_modern_format > 0) {
+        const count = imgStats.not_modern_format;
+        tips.push(`<strong class="text-blue-400">Convert ${count} image(s) to WebP or AVIF</strong> format — typically 25–50% smaller file size vs JPEG/PNG.`);
+      }
+      if (imgStats.missing_dimensions > 0) {
+        tips.push(`<strong class="text-blue-400">Add width and height attributes</strong> to ${imgStats.missing_dimensions} image(s) to prevent layout shift (CLS).`);
+      }
+      if (tips.length === 0) return '';
+      return `<div class="bg-blue-500/[0.06] border border-blue-500/20 rounded-md px-3 py-2.5 text-[11px] text-slate-100 leading-[1.7] mt-2">
+    <strong class="text-blue-400">💡 Image Optimisation Tips:</strong><br>
+    ${tips.join('<br>')}
+  </div>`;
+    }
+
+    function showDetailPage(job, pageUrl) {
+      document.getElementById('hero-section').style.display = 'none';
+      document.getElementById('progress-section').style.display = 'none';
+      document.getElementById('summary-section').style.display = 'none';
+      document.getElementById('results-section').style.display = 'none';
+      document.getElementById('detail-page-section').style.display = 'block';
+      document.getElementById('detail-back-link').href = '/seo-report?job=' + encodeURIComponent(job);
+      document.getElementById('detail-page-body').innerHTML = '<div class="text-center text-slate-400 py-16">Loading page details…</div>';
+
+      fetch(`/api/results?job_id=${encodeURIComponent(job)}`)
+        .then(r => r.json())
+        .then(data => {
+          const match = (data.results || []).find(x => x.url === pageUrl);
+          if (!match) {
+            document.getElementById('detail-page-body').innerHTML = detailNotFoundHtml();
+            return;
+          }
+          renderDetailPage(match);
+        })
+        .catch(() => {
+          document.getElementById('detail-page-body').innerHTML = detailNotFoundHtml();
+        });
+    }
+
+    function renderDetailPage(r) {
+      document.title = (r.title || r.url) + ' · Auditly SEO Report';
+      const score = r.score || 0;
+      const scoreClass = scoreBadgeClasses(score);
+      const statusPill = r.status_code === 200 ? pill('green', r.status_code)
+        : r.status_code >= 300 && r.status_code < 400 ? pill('yellow', r.status_code)
+          : r.status_code > 0 ? pill('red', r.status_code)
+            : pill('gray', 'ERR');
+      const loadMs = r.load_time_ms || 0;
+      const speedPill = loadMs > 2500 ? pill('red', loadMs + 'ms') : loadMs > 1000 ? pill('yellow', loadMs + 'ms') : pill('green', loadMs + 'ms');
+
+      document.getElementById('detail-page-body').innerHTML = `
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <div class="flex items-center gap-4">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-full font-extrabold text-lg border-2 ${scoreClass}">${score}</div>
+        <div>
+          <div class="text-sm font-mono text-slate-100 break-all">${escHtml(r.url)}</div>
+          <div class="flex items-center gap-2 mt-1.5">${statusPill}${speedPill}</div>
+        </div>
+      </div>
+      <a href="${escHtml(r.url)}" target="_blank" class="px-3 py-1.5 text-xs font-semibold bg-transparent border border-white/10 text-slate-100 rounded-lg hover:border-blue-500 hover:text-blue-400 transition whitespace-nowrap">Open page ↗</a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${buildDetailBlocksHtml(r)}</div>
+  `;
+    }
+
+    function detailNotFoundHtml() {
+      return `<div class="text-center py-20">
+    <div class="text-4xl mb-3">⚠️</div>
+    <div class="text-base font-semibold text-slate-100 mb-1.5">Couldn't load this page's details</div>
+    <div class="text-slate-400 text-sm mb-5">The analysis job may have expired, or the server was restarted.</div>
+    <a href="/seo-report" class="inline-block px-4 py-2 text-sm font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">Start a new analysis</a>
+  </div>`;
+    }
+
+    function initRouting() {
+      const params = new URLSearchParams(window.location.search);
+      const job = params.get('job');
+      const page = params.get('page');
+      const url = params.get('url');
+
+      if (job) {
+        currentJobId = job;
+        if (page) {
+          showDetailPage(job, page);
+        } else {
+          document.getElementById('progress-section').style.display = 'none';
+          loadResults(true);
+        }
+        return;
+      }
+
+      if (url) {
+        document.getElementById('domain-input').value = url;
+        startAnalysis();
+      }
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && document.activeElement.id === 'domain-input') {
+        startAnalysis();
+      }
+    });
+
+
+    // Show the summary cards with zeroed-out values before any analysis has run
+    renderSummary();
+
+    // Build the results table head + column selector once; renderTable() only ever
+    // touches the tbody + sort icons afterwards so filter inputs never lose focus
+    renderTableHead();
+    renderColumnPanel();
+    renderFilterPanel();
+
+    // Restore an in-progress/completed job or open a single page's detail view from the URL
+    initRouting();
+
+    function downloadBlob(content, filename, contentType) {
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 0);
+    }
+
+    function downloadSummaryJSON() {
+      if (!allResults || allResults.length === 0) return;
+      const json = JSON.stringify(allResults, null, 2);
+      downloadBlob(json, `seo_audit_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+    }
+
+    function downloadSummaryCSV() {
+      if (!allResults || allResults.length === 0) return;
+      const headers = [
+        "URL", "Score", "Status", "Title", "Title Length", "Meta Description",
+        "Desc Length", "H1 Count", "H2 Count", "Images", "Missing Alt",
+        "Load Time (ms)", "Word Count", "Issues", "Warnings", "HTTPS", "Canonical"
+      ];
+
+      const rows = allResults.map(r => [
+        `"${(r.url || "").replace(/"/g, '""')}"`,
+        r.score || 0,
+        r.status_code || "",
+        `"${(r.title || "").replace(/"/g, '""')}"`,
+        r.title_length || 0,
+        `"${(r.meta_description || "").replace(/"/g, '""')}"`,
+        r.meta_description_length || 0,
+        r.headings?.h1?.length || 0,
+        r.headings?.h2?.length || 0,
+        r.image_stats?.total || 0,
+        r.image_stats?.missing_alt || 0,
+        r.load_time_ms || 0,
+        r.word_count || 0,
+        r.issues?.length || 0,
+        r.warnings?.length || 0,
+        r.has_https ? "Yes" : "No",
+        `"${(r.canonical || "").replace(/"/g, '""')}"`
+      ]);
+
+      const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      downloadBlob(csvContent, `seo_audit_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+    }
+
+    function downloadSummaryExcel() {
+      if (!allResults || allResults.length === 0) return;
+      if (typeof XLSX === 'undefined') {
+        alert("Excel export library is still loading. Please try again in a moment.");
+        return;
+      }
+
+      // Define colors matching the Tailwind palette used on-page
+      const colors = {
+        bg: "0f1117",
+        s1: "161920",
+        s2: "1c1f28",
+        border: "2a2e3d",
+        text: "e2e5f1",
+        muted: "5a6080",
+        green: "34d399",
+        yellow: "f59e0b",
+        red: "f87171",
+        blue: "3b82f6",
+        purple: "a855f7",
+        cyan: "06b6d4"
+      };
+
+      const headers = [
+        "URL", "Score", "Status", "Title", "Title Length", "Meta Description",
+        "Desc Length", "H1 Count", "H2 Count", "Images", "Missing Alt",
+        "Load Time (ms)", "Word Count", "Issues", "Warnings", "HTTPS", "Canonical"
+      ];
+
+      const rows = allResults.map(r => [
+        r.url || "",
+        r.score || 0,
+        r.status_code || "",
+        r.title || "",
+        r.title_length || 0,
+        r.meta_description || "",
+        r.meta_description_length || 0,
+        r.headings?.h1?.length || 0,
+        r.headings?.h2?.length || 0,
+        r.image_stats?.total || 0,
+        r.image_stats?.missing_alt || 0,
+        r.load_time_ms || 0,
+        r.word_count || 0,
+        r.issues?.length || 0,
+        r.warnings?.length || 0,
+        r.has_https ? "Yes" : "No",
+        r.canonical || ""
+      ]);
+
+      // Create worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+      // Set column widths
+      worksheet["!cols"] = [
+        { wch: 50 }, // URL
+        { wch: 8 },  // Score
+        { wch: 8 },  // Status
+        { wch: 40 }, // Title
+        { wch: 12 }, // Title Length
+        { wch: 50 }, // Meta Description
+        { wch: 12 }, // Desc Length
+        { wch: 10 }, // H1
+        { wch: 10 }, // H2
+        { wch: 8 },  // Images
+        { wch: 12 }, // Missing Alt
+        { wch: 14 }, // Load Time
+        { wch: 12 }, // Word Count
+        { wch: 8 },  // Issues
+        { wch: 10 }, // Warnings
+        { wch: 8 },  // HTTPS
+        { wch: 50 }  // Canonical
+      ];
+
+      // Apply styles to header row
+      const range = XLSX.utils.decode_range(worksheet["!ref"]);
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!worksheet[cellRef]) continue;
+
+        worksheet[cellRef].s = {
+          font: { bold: true, color: { rgb: colors.text }, sz: 11 },
+          fill: { fgColor: { rgb: colors.s2 }, patternType: "solid" },
+          border: {
+            bottom: { style: "thin", color: { rgb: colors.border } }
+          },
+          alignment: { vertical: "center", horizontal: "left" }
+        };
+      }
+
+      // Apply data row styles with conditional coloring
+      for (let row = 1; row <= range.e.r; row++) {
+        const result = allResults[row - 1];
+        const score = result.score || 0;
+
+        // Determine row background based on score
+        let rowBg = colors.s1;
+        if (score >= 80) rowBg = "0a1f0a";      // Dark green tint
+        else if (score >= 60) rowBg = "1a1f0a"; // Dark yellow tint
+        else if (score >= 40) rowBg = "1f1a0a"; // Dark orange tint
+        else rowBg = "1f0a0a";                   // Dark red tint
+
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellRef]) continue;
+
+          const baseStyle = {
+            font: { color: { rgb: colors.text }, sz: 10 },
+            fill: { fgColor: { rgb: rowBg }, patternType: "solid" },
+            alignment: { vertical: "center", wrapText: true }
+          };
+
+          // Score column - colored based on value
+          if (col === 1) {
+            let scoreColor = colors.red;
+            if (score >= 80) scoreColor = colors.green;
+            else if (score >= 60) scoreColor = colors.cyan;
+            else if (score >= 40) scoreColor = colors.yellow;
+
+            baseStyle.font = {
+              bold: true,
+              color: { rgb: scoreColor },
+              sz: 11
+            };
+            baseStyle.fill = {
+              fgColor: { rgb: scoreColor + "20" }, // 20 = 12% opacity
+              patternType: "solid"
+            };
+          }
+
+          // Status column - colored pills
+          if (col === 2) {
+            const status = result.status_code;
+            let statusColor = colors.red;
+            let statusBg = colors.red + "20";
+            if (status === 200) {
+              statusColor = colors.green;
+              statusBg = colors.green + "20";
+            } else if (status >= 300 && status < 400) {
+              statusColor = colors.yellow;
+              statusBg = colors.yellow + "20";
+            }
+            baseStyle.font = { bold: true, color: { rgb: statusColor }, sz: 10 };
+            baseStyle.fill = { fgColor: { rgb: statusBg }, patternType: "solid" };
+          }
+
+          // Title Length - colored based on ideal range
+          if (col === 4) {
+            const tl = result.title_length || 0;
+            if (!result.title) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (tl < 10 || tl > 70) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // Desc Length - colored
+          if (col === 6) {
+            const dl = result.meta_description_length || 0;
+            if (!result.meta_description) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (dl < 50 || dl > 165) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // H1 Count - colored
+          if (col === 7) {
+            const h1Count = result.headings?.h1?.length || 0;
+            if (h1Count === 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            } else if (h1Count > 1) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.green } };
+            }
+          }
+
+          // Missing Alt - colored
+          if (col === 10) {
+            const missing = result.image_stats?.missing_alt || 0;
+            const total = result.image_stats?.total || 0;
+            if (missing === 0 && total > 0) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else if (missing > 0 && missing < total) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else if (missing > 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Load Time - colored
+          if (col === 11) {
+            const load = result.load_time_ms || 0;
+            if (load < 1000) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else if (load < 2500) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Issues count - red if any
+          if (col === 13) {
+            const issues = result.issues?.length || 0;
+            if (issues > 0) {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          // Warnings count - yellow if any
+          if (col === 14) {
+            const warns = result.warnings?.length || 0;
+            if (warns > 0) {
+              baseStyle.font = { color: { rgb: colors.yellow } };
+            }
+          }
+
+          // HTTPS - colored
+          if (col === 15) {
+            if (result.has_https) {
+              baseStyle.font = { color: { rgb: colors.green } };
+            } else {
+              baseStyle.font = { color: { rgb: colors.red }, bold: true };
+            }
+          }
+
+          worksheet[cellRef].s = baseStyle;
+        }
+      }
+
+      // Add alternating row borders for readability
+      for (let row = 1; row <= range.e.r; row++) {
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!worksheet[cellRef]) continue;
+          if (!worksheet[cellRef].s) worksheet[cellRef].s = {};
+          if (!worksheet[cellRef].s.border) {
+            worksheet[cellRef].s.border = {
+              bottom: { style: "hair", color: { rgb: colors.border + "80" } }
+            };
+          }
+        }
+      }
+
+      // Freeze header row
+      worksheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft" };
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "SEO Audit");
+
+      // Add a second sheet with issue details
+      const issueHeaders = ["URL", "Issue Type", "Message", "Points"];
+      const issueRows = [];
+      allResults.forEach(r => {
+        (r.issues || []).forEach(i => issueRows.push([r.url, "Error", i.msg, i.points || 0]));
+        (r.warnings || []).forEach(w => issueRows.push([r.url, "Warning", w.msg, w.points || 0]));
+        (r.passed || []).forEach(p => issueRows.push([r.url, "Passed", p.msg, p.points || 0]));
+      });
+
+      if (issueRows.length > 0) {
+        const issueSheet = XLSX.utils.aoa_to_sheet([issueHeaders, ...issueRows]);
+        issueSheet["!cols"] = [{ wch: 50 }, { wch: 12 }, { wch: 80 }, { wch: 10 }];
+
+        // Style issue sheet
+        const issueRange = XLSX.utils.decode_range(issueSheet["!ref"]);
+        for (let col = 0; col <= issueRange.e.c; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+          if (!issueSheet[cellRef]) continue;
+          issueSheet[cellRef].s = {
+            font: { bold: true, color: { rgb: colors.text }, sz: 11 },
+            fill: { fgColor: { rgb: colors.s2 }, patternType: "solid" }
+          };
+        }
+
+        // Color issue types
+        for (let row = 1; row <= issueRange.e.r; row++) {
+          const typeCell = XLSX.utils.encode_cell({ r: row, c: 1 });
+          if (!issueSheet[typeCell]) continue;
+
+          const type = issueSheet[typeCell].v;
+          let typeColor = colors.muted;
+          if (type === "Error") typeColor = colors.red;
+          else if (type === "Warning") typeColor = colors.yellow;
+          else if (type === "Passed") typeColor = colors.green;
+
+          issueSheet[typeCell].s = {
+            font: { bold: true, color: { rgb: typeColor }, sz: 10 },
+            fill: { fgColor: { rgb: typeColor + "15" }, patternType: "solid" },
+            alignment: { horizontal: "center" }
+          };
+        }
+
+        XLSX.utils.book_append_sheet(workbook, issueSheet, "Issues & Checks");
+      }
+
+      XLSX.writeFile(workbook, `seo_audit_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+  </script>
+{{end}}

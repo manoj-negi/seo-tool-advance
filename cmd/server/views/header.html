@@ -1,0 +1,131 @@
+{{define "header"}}
+  <!-- SITE HEADER -->
+  <header class="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/75 border-b border-white/10">
+    <div class="max-w-[1400px] mx-auto flex items-center justify-between gap-4 px-6 lg:px-10 py-3.5">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-base shadow-lg shadow-blue-500/20">🔍</span>
+        <span class="flex flex-col leading-none">
+          <span class="text-[15px] font-extrabold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">SEO Analyser</span>
+          <span class="text-[10px] text-slate-500 font-medium tracking-wide mt-0.5">Technical Audit Suite</span>
+        </span>
+      </a>
+      <div class="flex items-center gap-3">
+        <nav id="site-nav" class="flex items-center gap-1">
+          <a href="/" class="px-3 py-1.5 text-[13px] font-semibold rounded-md transition {{if eq .ActivePath "/"}}text-blue-400 bg-blue-500/10{{else}}text-slate-400 hover:text-slate-100 hover:bg-white/5{{end}}">Home</a>
+          <a href="/seo-report" class="px-3 py-1.5 text-[13px] font-semibold rounded-md transition {{if eq .ActivePath "/seo-report"}}text-blue-400 bg-blue-500/10{{else}}text-slate-400 hover:text-slate-100 hover:bg-white/5{{end}}">SEO Report</a>
+          <a href="/reports" class="px-3 py-1.5 text-[13px] font-semibold rounded-md transition {{if eq .ActivePath "/reports"}}text-blue-400 bg-blue-500/10{{else}}text-slate-400 hover:text-slate-100 hover:bg-white/5{{end}}">Reports</a>
+        </nav>
+        <div class="w-px h-5 bg-white/10 hidden sm:block"></div>
+        <button onclick="openAuthModal('login')"
+          class="px-3.5 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-slate-100 hover:border-blue-500 hover:text-blue-400 transition whitespace-nowrap">Sign In</button>
+        <button onclick="openAuthModal('signup')"
+          class="hidden sm:inline-flex px-3.5 py-1.5 text-[13px] font-semibold rounded-md bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition whitespace-nowrap">Sign Up</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- AUTH MODAL -->
+  <div id="auth-modal-backdrop" onclick="if(event.target===this) closeAuthModal()"
+    class="hidden fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-6">
+      <button onclick="closeAuthModal()" aria-label="Close"
+        class="absolute top-4 right-4 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-md transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <div class="flex items-center gap-2.5 mb-6">
+        <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-base shadow-lg shadow-blue-500/20">🔍</span>
+        <span class="text-[15px] font-extrabold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">SEO Analyser</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="grid grid-cols-2 gap-1 bg-slate-950 border border-white/10 rounded-lg p-1 mb-6">
+        <button id="auth-tab-login" onclick="setAuthTab('login')"
+          class="px-3 py-1.5 text-xs font-semibold rounded-md transition">Log In</button>
+        <button id="auth-tab-signup" onclick="setAuthTab('signup')"
+          class="px-3 py-1.5 text-xs font-semibold rounded-md transition">Sign Up</button>
+      </div>
+
+      <div id="auth-notice" class="hidden mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-400 px-3 py-2 rounded-lg text-[11px] leading-relaxed">
+        🚧 <span>Authentication isn't connected yet — this is a UI preview only.</span>
+      </div>
+
+      <!-- Log In form -->
+      <form id="auth-form-login" onsubmit="return submitAuthForm(event)" class="flex flex-col gap-3.5">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Email</label>
+          <input type="email" required placeholder="you@example.com"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Password</label>
+          <input type="password" required placeholder="••••••••"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <button type="submit"
+          class="mt-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition">Log In</button>
+        <p class="text-center text-[11px] text-slate-500">Don't have an account? <button type="button" onclick="setAuthTab('signup')" class="text-blue-400 hover:underline font-semibold">Sign up</button></p>
+      </form>
+
+      <!-- Sign Up form -->
+      <form id="auth-form-signup" onsubmit="return submitAuthForm(event)" class="hidden flex-col gap-3.5">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Name</label>
+          <input type="text" required placeholder="Jane Doe"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Email</label>
+          <input type="email" required placeholder="you@example.com"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Password</label>
+          <input type="password" required minlength="8" placeholder="At least 8 characters"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <button type="submit"
+          class="mt-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition">Create Account</button>
+        <p class="text-center text-[11px] text-slate-500">Already have an account? <button type="button" onclick="setAuthTab('login')" class="text-blue-400 hover:underline font-semibold">Log in</button></p>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function setAuthTab(tab) {
+      const isLogin = tab === 'login';
+      document.getElementById('auth-form-login').classList.toggle('hidden', !isLogin);
+      document.getElementById('auth-form-login').classList.toggle('flex', isLogin);
+      document.getElementById('auth-form-signup').classList.toggle('hidden', isLogin);
+      document.getElementById('auth-form-signup').classList.toggle('flex', !isLogin);
+
+      const active = 'bg-slate-800 text-slate-100';
+      const inactive = 'text-slate-400 hover:text-slate-100';
+      document.getElementById('auth-tab-login').className = 'px-3 py-1.5 text-xs font-semibold rounded-md transition ' + (isLogin ? active : inactive);
+      document.getElementById('auth-tab-signup').className = 'px-3 py-1.5 text-xs font-semibold rounded-md transition ' + (isLogin ? inactive : active);
+
+      document.getElementById('auth-notice').classList.add('hidden');
+    }
+
+    function openAuthModal(tab) {
+      setAuthTab(tab || 'login');
+      document.getElementById('auth-modal-backdrop').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal-backdrop').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function submitAuthForm(e) {
+      e.preventDefault();
+      document.getElementById('auth-notice').classList.remove('hidden');
+      return false;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeAuthModal();
+    });
+  </script>
+{{end}}

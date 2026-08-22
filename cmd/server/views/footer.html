@@ -1,0 +1,47 @@
+{{define "footer"}}
+  <!-- SITE FOOTER -->
+  <footer class="border-t border-white/10 bg-slate-950">
+    <div class="max-w-[1400px] mx-auto px-6 lg:px-10 pt-12 pb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-10">
+        <div class="sm:col-span-2 lg:col-span-1">
+          <div class="flex items-center gap-2.5 mb-3">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 text-sm">🔍</span>
+            <span class="text-sm font-extrabold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">SEO Analyser</span>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed max-w-xs">Fast, no-nonsense technical SEO audits — crawl a sitemap, score every page, and ship fixes that move rankings.</p>
+        </div>
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">Navigate</div>
+          <ul class="flex flex-col gap-2 text-xs">
+            <li><a href="/" class="text-slate-400 hover:text-blue-400 transition">Home</a></li>
+            <li><a href="/seo-report" class="text-slate-400 hover:text-blue-400 transition">SEO Report</a></li>
+            <li><a href="/reports" class="text-slate-400 hover:text-blue-400 transition">Reports</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">Checks We Run</div>
+          <ul class="flex flex-col gap-2 text-xs text-slate-400">
+            <li>Title &amp; meta tags</li>
+            <li>Headings &amp; content structure</li>
+            <li>Images, links &amp; page speed</li>
+            <li>Open Graph &amp; structured data</li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">Built With</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="px-2 py-1 rounded-md bg-slate-900 border border-white/10 text-[10px] text-slate-400">Go</span>
+            <span class="px-2 py-1 rounded-md bg-slate-900 border border-white/10 text-[10px] text-slate-400">Tailwind CSS</span>
+            <span class="px-2 py-1 rounded-md bg-slate-900 border border-white/10 text-[10px] text-slate-400">Vanilla JS</span>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
+        <span>© {{.Year}} SEO Analyser — technical SEO audits, done fast.</span>
+        <span class="flex items-center gap-1.5">
+          <a href="/" class="hover:text-blue-400 transition">Home</a><span>·</span><a href="/seo-report" class="hover:text-blue-400 transition">SEO Report</a><span>·</span><a href="/reports" class="hover:text-blue-400 transition">Reports</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+{{end}}
