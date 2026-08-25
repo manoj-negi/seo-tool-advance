@@ -364,7 +364,14 @@
       const domain = document.getElementById('domain-input').value.trim();
       if (!domain) { alert('Please enter a domain name'); return; }
 
-      const maxPages = document.getElementById('max-pages').value;
+      const maxPages = parseInt(document.getElementById('max-pages').value, 10);
+      const loggedIn = !!getCookie('auth_user');
+      if (maxPages > 25 && !loggedIn) {
+        openAuthModal('login');
+        alert('Please sign in to crawl more than 25 pages.');
+        document.getElementById('max-pages').value = "25";
+        return;
+      }
 
       // Reset UI
       allResults = [];
@@ -392,9 +399,19 @@
 
       const encodedDomain = encodeURIComponent(domain);
       fetch(`/api/analyse?domain=${encodedDomain}&max_pages=${maxPages}`)
-        .then(r => r.json())
+        .then(r => {
+          if (r.status === 401) {
+            openAuthModal('login');
+            throw new Error('Please sign in to crawl more than 25 pages.');
+          }
+          return r.json();
+        })
         .then(data => {
           if (data.error) {
+            if (data.error === 'login_required') {
+              openAuthModal('login');
+              throw new Error('Please sign in to crawl more than 25 pages.');
+            }
             throw new Error(data.error);
           }
           currentJobId = data.job_id;
@@ -992,6 +1009,29 @@
 
     // Restore an in-progress/completed job or open a single page's detail view from the URL
     initRouting();
+
+    function checkDropdownLock() {
+      const loggedIn = !!getCookie('auth_user');
+      const select = document.getElementById('max-pages');
+      if (!select) return;
+      const options = select.options;
+      for (let i = 0; i < options.length; i++) {
+        const val = parseInt(options[i].value, 10);
+        if (val > 25) {
+          if (!loggedIn) {
+            options[i].disabled = true;
+            if (!options[i].text.includes('🔒')) {
+              options[i].text += ' 🔒';
+            }
+          } else {
+            options[i].disabled = false;
+            options[i].text = options[i].text.replace(' 🔒', '');
+          }
+        }
+      }
+    }
+    window.checkDropdownLock = checkDropdownLock;
+    checkDropdownLock();
 
     function downloadBlob(content, filename, contentType) {
       const blob = new Blob([content], { type: contentType });

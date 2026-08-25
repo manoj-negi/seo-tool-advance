@@ -13,6 +13,8 @@ import (
 	"seo-crawler/internal/models"
 	"seo-crawler/internal/scorer"
 	"seo-crawler/internal/sitemap"
+
+	"github.com/o1egl/paseto/v2"
 )
 
 func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +27,21 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 	maxPages := 50
 	if mp := r.URL.Query().Get("max_pages"); mp != "" {
 		fmt.Sscanf(mp, "%d", &maxPages)
+	}
+
+	if maxPages > 25 {
+		cookie, err := r.Cookie("auth_token")
+		if err != nil {
+			http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
+			return
+		}
+		v2 := paseto.NewV2()
+		var claims map[string]interface{}
+		err = v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil)
+		if err != nil {
+			http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
+			return
+		}
 	}
 
 	jobID := fmt.Sprintf("%s_%d", domain, time.Now().Unix())

@@ -217,6 +217,10 @@
         auth.classList.add('hidden');
         auth.classList.remove('flex');
       }
+
+      if (typeof window.checkDropdownLock === 'function') {
+        window.checkDropdownLock();
+      }
     }
 
     async function signOut() {
