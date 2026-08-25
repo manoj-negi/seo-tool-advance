@@ -13,6 +13,8 @@ func (s *Server) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/status", cors(s.handleStatus))
 	mux.HandleFunc("/api/results", cors(s.handleResults))
 	mux.HandleFunc("/api/reports", cors(s.handleReportsList))
+	mux.HandleFunc("/api/auth/signup", cors(s.handleSignup))
+	mux.HandleFunc("/api/auth/login", cors(s.handleLogin))
 
 	// Optional: serve static assets
 	//mux.Handle("/static/", http.FileServer(http.FS(staticFiles)))

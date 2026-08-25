@@ -20,6 +20,7 @@ const dbTimeout = 10 * time.Second
 type Store struct {
 	client  *mongo.Client
 	reports *mongo.Collection
+	users   *mongo.Collection
 }
 
 // reportDoc is the on-disk shape of one report in the "reports" collection.
@@ -59,7 +60,16 @@ func Open(uri string) (*Store, error) {
 		return nil, fmt.Errorf("create index: %w", err)
 	}
 
-	return &Store{client: client, reports: reports}, nil
+	users := client.Database("auditly").Collection("users")
+	if _, err := users.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "email", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	}); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, fmt.Errorf("create users email index: %w", err)
+	}
+
+	return &Store{client: client, reports: reports, users: users}, nil
 }
 
 func (s *Store) Close() error {
@@ -170,4 +180,36 @@ func averageScore(results []models.SEOResult) int {
 		total += r.Score
 	}
 	return total / len(results)
+}
+
+// CreateUser inserts a new user document. Returns an error if email is already taken.
+func (s *Store) CreateUser(user *models.User) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if user.ID == "" {
+		user.ID = bson.NewObjectID().Hex()
+	}
+
+	_, err := s.users.InsertOne(ctx, user)
+	if err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+	return nil
+}
+
+// GetUserByEmail retrieves a user by their email address.
+func (s *Store) GetUserByEmail(email string) (*models.User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var user models.User
+	err := s.users.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil // not found
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user by email: %w", err)
+	}
+	return &user, nil
 }

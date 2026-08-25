@@ -46,20 +46,20 @@
           class="px-3 py-1.5 text-xs font-semibold rounded-md transition">Sign Up</button>
       </div>
 
-      <div id="auth-notice" class="hidden mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-400 px-3 py-2 rounded-lg text-[11px] leading-relaxed">
-        🚧 <span>Authentication isn't connected yet — this is a UI preview only.</span>
+      <div id="auth-notice" class="hidden mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed">
+        <span id="auth-notice-icon">🚧</span> <span id="auth-notice-text">Authentication isn't connected yet — this is a UI preview only.</span>
       </div>
 
       <!-- Log In form -->
       <form id="auth-form-login" onsubmit="return submitAuthForm(event)" class="flex flex-col gap-3.5">
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Email</label>
-          <input type="email" required placeholder="you@example.com"
+          <input type="email" id="login-email" required placeholder="you@example.com"
             class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
         </div>
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Password</label>
-          <input type="password" required placeholder="••••••••"
+          <input type="password" id="login-password" required placeholder="••••••••"
             class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
         </div>
         <button type="submit"
@@ -71,17 +71,17 @@
       <form id="auth-form-signup" onsubmit="return submitAuthForm(event)" class="hidden flex-col gap-3.5">
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Name</label>
-          <input type="text" required placeholder="Jane Doe"
+          <input type="text" id="signup-name" required placeholder="Jane Doe"
             class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
         </div>
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Email</label>
-          <input type="email" required placeholder="you@example.com"
+          <input type="email" id="signup-email" required placeholder="you@example.com"
             class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
         </div>
         <div>
           <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Password</label>
-          <input type="password" required minlength="8" placeholder="At least 8 characters"
+          <input type="password" id="signup-password" required minlength="8" placeholder="At least 8 characters"
             class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
         </div>
         <button type="submit"
@@ -92,7 +92,10 @@
   </div>
 
   <script>
+    let currentAuthTab = 'login';
+
     function setAuthTab(tab) {
+      currentAuthTab = tab;
       const isLogin = tab === 'login';
       document.getElementById('auth-form-login').classList.toggle('hidden', !isLogin);
       document.getElementById('auth-form-login').classList.toggle('flex', isLogin);
@@ -118,9 +121,65 @@
       document.body.style.overflow = '';
     }
 
-    function submitAuthForm(e) {
+    async function submitAuthForm(e) {
       e.preventDefault();
-      document.getElementById('auth-notice').classList.remove('hidden');
+      const notice = document.getElementById('auth-notice');
+      const text = document.getElementById('auth-notice-text');
+      const icon = document.getElementById('auth-notice-icon');
+
+      notice.className = "mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed bg-blue-500/10 border border-blue-500/25 text-blue-400";
+      icon.innerText = "⏳";
+      text.innerText = "Processing...";
+      notice.classList.remove('hidden');
+
+      const isLogin = currentAuthTab === 'login';
+      const url = isLogin ? '/api/auth/login' : '/api/auth/signup';
+      
+      const payload = {};
+      if (isLogin) {
+        payload.email = document.getElementById('login-email').value;
+        payload.password = document.getElementById('login-password').value;
+      } else {
+        payload.name = document.getElementById('signup-name').value;
+        payload.email = document.getElementById('signup-email').value;
+        payload.password = document.getElementById('signup-password').value;
+      }
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        
+        if (!resp.ok) {
+          throw new Error(data.error || 'Request failed');
+        }
+
+        notice.className = "mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed bg-green-500/10 border border-green-500/25 text-green-400";
+        icon.innerText = "✅";
+        text.innerText = data.message || "Success!";
+
+        if (isLogin && data.user) {
+          text.innerText = `Welcome back, ${data.user.name}! Redirecting...`;
+          setTimeout(() => {
+            closeAuthModal();
+            location.reload();
+          }, 1500);
+        } else {
+          // If signup successful, switch to login tab after 2 seconds
+          setTimeout(() => {
+            setAuthTab('login');
+            notice.classList.add('hidden');
+          }, 2000);
+        }
+
+      } catch (err) {
+        notice.className = "mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed bg-red-500/10 border border-red-500/25 text-red-400";
+        icon.innerText = "❌";
+        text.innerText = err.message;
+      }
       return false;
     }
 
