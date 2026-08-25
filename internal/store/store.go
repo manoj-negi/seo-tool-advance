@@ -38,25 +38,16 @@ type reportDoc struct {
 	ResultsJSON string     `bson:"results_json"`
 }
 
-// Open connects to the MongoDB deployment at uri and ensures the reports
-// collection's indexes exist.
-func Open(uri string) (*Store, error) {
+// New initializes the Store using an existing connected MongoDB client
+// and ensures the collections' indexes exist.
+func New(client *mongo.Client) (*Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, fmt.Errorf("connect mongo: %w", err)
-	}
-	if err := client.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("ping mongo: %w", err)
-	}
 
 	reports := client.Database("auditly").Collection("reports")
 	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "created_at", Value: -1}},
 	}); err != nil {
-		_ = client.Disconnect(ctx)
 		return nil, fmt.Errorf("create index: %w", err)
 	}
 
@@ -65,17 +56,10 @@ func Open(uri string) (*Store, error) {
 		Keys:    bson.D{{Key: "email", Value: 1}},
 		Options: options.Index().SetUnique(true),
 	}); err != nil {
-		_ = client.Disconnect(ctx)
 		return nil, fmt.Errorf("create users email index: %w", err)
 	}
 
 	return &Store{client: client, reports: reports, users: users}, nil
-}
-
-func (s *Store) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
-	defer cancel()
-	return s.client.Disconnect(ctx)
 }
 
 // ReportSummary is one row in the Reports list table.
