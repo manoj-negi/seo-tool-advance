@@ -10,10 +10,118 @@
       </h1>
       <p class="text-slate-400 text-sm max-w-xl mb-7">Enter a domain to crawl the sitemap, analyse every page, and get actionable SEO insights — title, meta, headings, images, speed, and more.</p>
 
+      <style>
+        #pages-dropdown-btn { position:relative; }
+        #pages-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          min-width: 220px;
+          background: #0f172a;
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 6px;
+          z-index: 9999;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+          backdrop-filter: blur(12px);
+          display: none;
+        }
+        #pages-dropdown-menu.open { display: block; animation: ddFadeIn 0.15s ease; }
+        @keyframes ddFadeIn {
+          from { opacity:0; transform:translateY(-6px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        .dd-option {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 9px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          color: #cbd5e1;
+          transition: background 0.12s;
+          user-select: none;
+        }
+        .dd-option:hover:not(.dd-locked) { background: rgba(255,255,255,0.06); color: #f1f5f9; }
+        .dd-option.dd-selected { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+        .dd-option.dd-locked { cursor: not-allowed; opacity: 0.55; }
+        .dd-option.dd-locked:hover { background: rgba(239,68,68,0.06); }
+        .dd-lock-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          padding: 2px 7px;
+          border-radius: 20px;
+          background: linear-gradient(135deg, #7c3aed, #db2777);
+          color: #fff;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .dd-lock-icon { font-size: 10px; }
+        .dd-divider {
+          border: none;
+          border-top: 1px solid rgba(255,255,255,0.07);
+          margin: 5px 0;
+        }
+        .dd-section-label {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #475569;
+          padding: 6px 12px 2px;
+        }
+        #pages-dropdown-trigger {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #0f172a;
+          border: 1px solid rgba(255,255,255,0.1);
+          color: #f1f5f9;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: border-color 0.15s, box-shadow 0.15s;
+          white-space: nowrap;
+          min-width: 155px;
+          justify-content: space-between;
+        }
+        #pages-dropdown-trigger:hover { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+        #pages-dropdown-trigger .dd-chevron { font-size: 10px; transition: transform 0.2s; color: #64748b; }
+        #pages-dropdown-trigger.active .dd-chevron { transform: rotate(180deg); }
+        .dd-signin-hint {
+          margin: 4px 6px 2px;
+          border-radius: 8px;
+          padding: 8px 10px;
+          background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(219,39,119,0.15));
+          border: 1px solid rgba(124,58,237,0.25);
+          font-size: 11px;
+          color: #a78bfa;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .dd-signin-hint:hover { background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(219,39,119,0.25)); }
+        /* Hidden real select for form compat */
+        #max-pages { display: none; }
+      </style>
+
       <div class="flex flex-wrap justify-center gap-2.5 max-w-3xl w-full">
         <input type="text" id="domain-input" placeholder="example.com or https://example.com" value=""
           class="flex-1 min-w-[260px] bg-slate-900 border border-white/10 text-slate-100 placeholder-slate-500 px-4 py-3 text-sm rounded-lg outline-none focus:border-blue-500 transition">
-        <select id="max-pages" class="bg-slate-900 border border-white/10 text-slate-100 px-3.5 py-3 text-sm rounded-lg cursor-pointer outline-none focus:border-blue-500">
+
+        <!-- Hidden real select (kept for JS compat) -->
+        <select id="max-pages">
           <option value="1">1 page (Exact URL)</option>
           <option value="10">10 pages</option>
           <option value="25" selected>25 pages</option>
@@ -23,6 +131,33 @@
           <option value="500">500 pages</option>
           <option value="1000">1000 pages</option>
         </select>
+
+        <!-- Custom pages dropdown -->
+        <div id="pages-dropdown-btn" style="position:relative;">
+          <button id="pages-dropdown-trigger" onclick="togglePagesDropdown()" type="button">
+            <span id="pages-dropdown-label">25 pages</span>
+            <span class="dd-chevron">▼</span>
+          </button>
+          <div id="pages-dropdown-menu">
+            <div class="dd-section-label">Free tier</div>
+            <div class="dd-option" data-value="1"  onclick="selectPageLimit(1,  '1 page (Exact URL)')">1 page (Exact URL)</div>
+            <div class="dd-option" data-value="10" onclick="selectPageLimit(10, '10 pages')">10 pages</div>
+            <div class="dd-option dd-selected" data-value="25" onclick="selectPageLimit(25, '25 pages')">25 pages</div>
+            <hr class="dd-divider">
+            <div class="dd-section-label">Pro tier</div>
+            <div id="dd-signin-hint" class="dd-signin-hint" onclick="openAuthModal('login')" style="display:none;">
+              <span>🔐</span>
+              <span>Sign in to unlock larger crawls</span>
+              <span style="margin-left:auto;font-weight:700;font-size:10px;">Sign in →</span>
+            </div>
+            <div class="dd-option dd-pro" data-value="50"   onclick="selectPageLimit(50,   '50 pages')">50 pages   <span class="dd-lock-badge"><span class="dd-lock-icon">🔒</span> PRO</span></div>
+            <div class="dd-option dd-pro" data-value="100"  onclick="selectPageLimit(100,  '100 pages')">100 pages  <span class="dd-lock-badge"><span class="dd-lock-icon">🔒</span> PRO</span></div>
+            <div class="dd-option dd-pro" data-value="200"  onclick="selectPageLimit(200,  '200 pages')">200 pages  <span class="dd-lock-badge"><span class="dd-lock-icon">🔒</span> PRO</span></div>
+            <div class="dd-option dd-pro" data-value="500"  onclick="selectPageLimit(500,  '500 pages')">500 pages  <span class="dd-lock-badge"><span class="dd-lock-icon">🔒</span> PRO</span></div>
+            <div class="dd-option dd-pro" data-value="1000" onclick="selectPageLimit(1000, '1000 pages')">1000 pages <span class="dd-lock-badge"><span class="dd-lock-icon">🔒</span> PRO</span></div>
+          </div>
+        </div>
+
         <button id="analyse-btn" onclick="startAnalysis()"
           class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-none whitespace-nowrap">Analyse Site</button>
       </div>
@@ -1010,25 +1145,68 @@
     // Restore an in-progress/completed job or open a single page's detail view from the URL
     initRouting();
 
+    // ── Custom pages dropdown ──────────────────────────────────────────────
+    let _pagesDropdownOpen = false;
+
+    function togglePagesDropdown() {
+      _pagesDropdownOpen = !_pagesDropdownOpen;
+      const menu = document.getElementById('pages-dropdown-menu');
+      const trigger = document.getElementById('pages-dropdown-trigger');
+      menu.classList.toggle('open', _pagesDropdownOpen);
+      trigger.classList.toggle('active', _pagesDropdownOpen);
+    }
+
+    function selectPageLimit(val, label) {
+      const loggedIn = !!getCookie('auth_user');
+      if (val > 25 && !loggedIn) {
+        openAuthModal('login');
+        closePagesDropdown();
+        return;
+      }
+      // Update hidden select
+      document.getElementById('max-pages').value = val;
+      // Update trigger label
+      document.getElementById('pages-dropdown-label').textContent = label;
+      // Update selected state
+      document.querySelectorAll('.dd-option').forEach(el => {
+        el.classList.toggle('dd-selected', parseInt(el.dataset.value) === val);
+      });
+      closePagesDropdown();
+    }
+
+    function closePagesDropdown() {
+      _pagesDropdownOpen = false;
+      document.getElementById('pages-dropdown-menu').classList.remove('open');
+      document.getElementById('pages-dropdown-trigger').classList.remove('active');
+    }
+
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!document.getElementById('pages-dropdown-btn').contains(e.target)) {
+        closePagesDropdown();
+      }
+    });
+
     function checkDropdownLock() {
       const loggedIn = !!getCookie('auth_user');
-      const select = document.getElementById('max-pages');
-      if (!select) return;
-      const options = select.options;
-      for (let i = 0; i < options.length; i++) {
-        const val = parseInt(options[i].value, 10);
-        if (val > 25) {
-          if (!loggedIn) {
-            options[i].disabled = true;
-            if (!options[i].text.includes('🔒')) {
-              options[i].text += ' 🔒';
-            }
-          } else {
-            options[i].disabled = false;
-            options[i].text = options[i].text.replace(' 🔒', '');
-          }
+      const proOptions = document.querySelectorAll('.dd-option.dd-pro');
+      const hint = document.getElementById('dd-signin-hint');
+      proOptions.forEach(el => {
+        if (loggedIn) {
+          el.classList.remove('dd-locked');
+          // Remove lock badge
+          const badge = el.querySelector('.dd-lock-badge');
+          if (badge) badge.style.display = 'none';
+          el.onclick = function() { selectPageLimit(parseInt(el.dataset.value), el.childNodes[0].textContent.trim()); };
+        } else {
+          el.classList.add('dd-locked');
+          // Show lock badge
+          const badge = el.querySelector('.dd-lock-badge');
+          if (badge) badge.style.display = 'inline-flex';
+          el.onclick = function(e) { e.stopPropagation(); openAuthModal('login'); closePagesDropdown(); };
         }
-      }
+      });
+      if (hint) hint.style.display = loggedIn ? 'none' : 'flex';
     }
     window.checkDropdownLock = checkDropdownLock;
     checkDropdownLock();
