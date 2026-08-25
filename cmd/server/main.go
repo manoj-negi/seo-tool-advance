@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"seo-crawler/internal/crawler"
 	"seo-crawler/internal/models"
 	"seo-crawler/internal/scorer"
@@ -49,8 +50,8 @@ type Server struct {
 	reportsTpl   *template.Template
 }
 
-func New(dbPath string) (*Server, error) {
-	st, err := store.Open(dbPath)
+func New(mongoURI string) (*Server, error) {
+	st, err := store.Open(mongoURI)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +311,12 @@ func (s *Server) handleReportsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	srv, err := New("data/auditly.db")
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
+	srv, err := New(mongoURI)
 	if err != nil {
 		log.Fatalf("failed to open report store: %v", err)
 	}

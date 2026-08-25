@@ -1,60 +1,71 @@
-// Package store persists completed crawl jobs to a local SQLite database so
-// past reports survive process restarts and can be listed on the Reports page.
+// Package store persists completed crawl jobs to MongoDB so past reports
+// survive process restarts and can be listed on the Reports page.
 package store
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"seo-crawler/internal/models"
 
-	_ "modernc.org/sqlite"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+const dbTimeout = 10 * time.Second
+
 type Store struct {
-	db *sql.DB
+	client  *mongo.Client
+	reports *mongo.Collection
 }
 
-// Open creates (if needed) the parent directory and the SQLite file at path,
-// and ensures the reports table exists.
-func Open(path string) (*Store, error) {
-	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("create db dir: %w", err)
-		}
-	}
+// reportDoc is the on-disk shape of one report in the "reports" collection.
+// Results are kept as a single marshaled JSON blob (mirroring the previous
+// SQLite column) rather than a native BSON array, since nothing queries into
+// individual result fields.
+type reportDoc struct {
+	JobID       string     `bson:"_id"`
+	Domain      string     `bson:"domain"`
+	CreatedAt   time.Time  `bson:"created_at"`
+	CompletedAt *time.Time `bson:"completed_at,omitempty"`
+	PagesTotal  int        `bson:"pages_total"`
+	AvgScore    int        `bson:"avg_score"`
+	SitemapURL  string     `bson:"sitemap_url"`
+	ResultsJSON string     `bson:"results_json"`
+}
 
-	db, err := sql.Open("sqlite", path)
+// Open connects to the MongoDB deployment at uri and ensures the reports
+// collection's indexes exist.
+func Open(uri string) (*Store, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
-		return nil, fmt.Errorf("open db: %w", err)
+		return nil, fmt.Errorf("connect mongo: %w", err)
 	}
-	db.SetMaxOpenConns(1) // modernc.org/sqlite is not safe for concurrent writers
-
-	const schema = `
-	CREATE TABLE IF NOT EXISTS reports (
-		job_id       TEXT PRIMARY KEY,
-		domain       TEXT NOT NULL,
-		created_at   DATETIME NOT NULL,
-		completed_at DATETIME,
-		pages_total  INTEGER NOT NULL,
-		avg_score    INTEGER NOT NULL,
-		sitemap_url  TEXT,
-		results_json TEXT NOT NULL
-	);`
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create schema: %w", err)
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("ping mongo: %w", err)
 	}
 
-	return &Store{db: db}, nil
+	reports := client.Database("auditly").Collection("reports")
+	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "created_at", Value: -1}},
+	}); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, fmt.Errorf("create index: %w", err)
+	}
+
+	return &Store{client: client, reports: reports}, nil
 }
 
 func (s *Store) Close() error {
-	return s.db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	return s.client.Disconnect(ctx)
 }
 
 // ReportSummary is one row in the Reports list table.
@@ -68,23 +79,28 @@ type ReportSummary struct {
 }
 
 // SaveReport persists a completed job. Safe to call multiple times for the
-// same job ID (e.g. re-saving) — the row is replaced.
+// same job ID (e.g. re-saving) — the document is replaced.
 func (s *Store) SaveReport(job *models.Job) error {
 	resultsJSON, err := json.Marshal(job.Results)
 	if err != nil {
 		return fmt.Errorf("marshal results: %w", err)
 	}
 
-	avg := averageScore(job.Results)
+	doc := reportDoc{
+		JobID:       job.ID,
+		Domain:      job.Domain,
+		CreatedAt:   job.CreatedAt,
+		CompletedAt: job.CompletedAt,
+		PagesTotal:  len(job.Results),
+		AvgScore:    averageScore(job.Results),
+		SitemapURL:  job.SitemapURL,
+		ResultsJSON: string(resultsJSON),
+	}
 
-	_, err = s.db.Exec(
-		`INSERT INTO reports (job_id, domain, created_at, completed_at, pages_total, avg_score, sitemap_url, results_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(job_id) DO UPDATE SET
-			domain=excluded.domain, completed_at=excluded.completed_at, pages_total=excluded.pages_total,
-			avg_score=excluded.avg_score, sitemap_url=excluded.sitemap_url, results_json=excluded.results_json`,
-		job.ID, job.Domain, job.CreatedAt, job.CompletedAt, len(job.Results), avg, job.SitemapURL, string(resultsJSON),
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	_, err = s.reports.ReplaceOne(ctx, bson.M{"_id": job.ID}, doc, options.Replace().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("save report: %w", err)
 	}
@@ -93,33 +109,45 @@ func (s *Store) SaveReport(job *models.Job) error {
 
 // ListReports returns every saved report, most recent first.
 func (s *Store) ListReports() ([]ReportSummary, error) {
-	rows, err := s.db.Query(`SELECT job_id, domain, created_at, completed_at, pages_total, avg_score FROM reports ORDER BY created_at DESC`)
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetProjection(bson.M{"results_json": 0})
+	cur, err := s.reports.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, fmt.Errorf("list reports: %w", err)
 	}
-	defer rows.Close()
+	defer cur.Close(ctx)
 
 	var out []ReportSummary
-	for rows.Next() {
-		var r ReportSummary
-		var completedAt sql.NullTime
-		if err := rows.Scan(&r.JobID, &r.Domain, &r.CreatedAt, &completedAt, &r.PagesTotal, &r.AvgScore); err != nil {
+	for cur.Next(ctx) {
+		var d reportDoc
+		if err := cur.Decode(&d); err != nil {
 			return nil, fmt.Errorf("scan report: %w", err)
 		}
-		if completedAt.Valid {
-			r.CompletedAt = &completedAt.Time
-		}
-		out = append(out, r)
+		out = append(out, ReportSummary{
+			JobID:       d.JobID,
+			Domain:      d.Domain,
+			CreatedAt:   d.CreatedAt,
+			CompletedAt: d.CompletedAt,
+			PagesTotal:  d.PagesTotal,
+			AvgScore:    d.AvgScore,
+		})
 	}
-	return out, rows.Err()
+	return out, cur.Err()
 }
 
 // GetResults returns the stored page results for a job ID, or (nil, false) if
 // no report with that ID has been saved.
 func (s *Store) GetResults(jobID string) ([]models.SEOResult, bool, error) {
-	var resultsJSON string
-	err := s.db.QueryRow(`SELECT results_json FROM reports WHERE job_id = ?`, jobID).Scan(&resultsJSON)
-	if err == sql.ErrNoRows {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var d reportDoc
+	err := s.reports.FindOne(ctx, bson.M{"_id": jobID}).Decode(&d)
+	if err == mongo.ErrNoDocuments {
 		return nil, false, nil
 	}
 	if err != nil {
@@ -127,7 +155,7 @@ func (s *Store) GetResults(jobID string) ([]models.SEOResult, bool, error) {
 	}
 
 	var results []models.SEOResult
-	if err := json.Unmarshal([]byte(resultsJSON), &results); err != nil {
+	if err := json.Unmarshal([]byte(d.ResultsJSON), &results); err != nil {
 		return nil, false, fmt.Errorf("unmarshal results: %w", err)
 	}
 	return results, true, nil
