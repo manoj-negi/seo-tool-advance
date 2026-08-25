@@ -16,10 +16,19 @@
           <a href="/reports" class="px-3 py-1.5 text-[13px] font-semibold rounded-md transition {{if eq .ActivePath "/reports"}}text-blue-400 bg-blue-500/10{{else}}text-slate-400 hover:text-slate-100 hover:bg-white/5{{end}}">Reports</a>
         </nav>
         <div class="w-px h-5 bg-white/10 hidden sm:block"></div>
-        <button onclick="openAuthModal('login')"
-          class="px-3.5 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-slate-100 hover:border-blue-500 hover:text-blue-400 transition whitespace-nowrap">Sign In</button>
-        <button onclick="openAuthModal('signup')"
-          class="hidden sm:inline-flex px-3.5 py-1.5 text-[13px] font-semibold rounded-md bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition whitespace-nowrap">Sign Up</button>
+        <!-- Unauthenticated View -->
+        <div id="nav-unauth" class="flex items-center gap-3">
+          <button onclick="openAuthModal('login')"
+            class="px-3.5 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-slate-100 hover:border-blue-500 hover:text-blue-400 transition whitespace-nowrap">Sign In</button>
+          <button onclick="openAuthModal('signup')"
+            class="hidden sm:inline-flex px-3.5 py-1.5 text-[13px] font-semibold rounded-md bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition whitespace-nowrap">Sign Up</button>
+        </div>
+        <!-- Authenticated View -->
+        <div id="nav-auth" class="hidden flex items-center gap-3.5">
+          <span class="text-[13px] font-semibold text-slate-300">Welcome, <span id="nav-username" class="text-blue-400">User</span></span>
+          <button onclick="signOut()"
+            class="px-3 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition whitespace-nowrap">Sign Out</button>
+        </div>
       </div>
     </div>
   </header>
@@ -181,6 +190,42 @@
         text.innerText = err.message;
       }
       return false;
+    }
+
+    document.addEventListener('DOMContentLoaded', updateAuthUI);
+
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+      return null;
+    }
+
+    function updateAuthUI() {
+      const username = getCookie('auth_user');
+      const unauth = document.getElementById('nav-unauth');
+      const auth = document.getElementById('nav-auth');
+      const userSpan = document.getElementById('nav-username');
+
+      if (username) {
+        unauth.classList.add('hidden');
+        auth.classList.remove('hidden');
+        auth.classList.add('flex');
+        userSpan.innerText = username;
+      } else {
+        unauth.classList.remove('hidden');
+        auth.classList.add('hidden');
+        auth.classList.remove('flex');
+      }
+    }
+
+    async function signOut() {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } catch (err) {
+        console.error('Logout error:', err);
+      }
+      location.reload();
     }
 
     document.addEventListener('keydown', e => {

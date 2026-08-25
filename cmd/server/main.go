@@ -21,6 +21,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/o1egl/paseto/v2"
 )
 
 //go:embed views/*.html
@@ -47,6 +48,7 @@ type Server struct {
 	jobs       map[string]*models.Job
 	jobsMu     sync.RWMutex
 	store      *store.Store
+	pasetoKey  []byte
 
 	homeTpl      *template.Template
 	seoReportTpl *template.Template
@@ -58,10 +60,23 @@ func New(mongoURI string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	pKey := []byte(os.Getenv("PASETO_SYMMETRIC_KEY"))
+	if len(pKey) == 0 {
+		pKey = []byte("yellow-submarine-yellow-submarine")
+	} else if len(pKey) < 32 {
+		padded := make([]byte, 32)
+		copy(padded, pKey)
+		pKey = padded
+	} else if len(pKey) > 32 {
+		pKey = pKey[:32]
+	}
+
 	return &Server{
 		crawlerCfg:   crawler.DefaultConfig(),
 		jobs:         make(map[string]*models.Job),
 		store:        st,
+		pasetoKey:    pKey,
 		homeTpl:      mustParsePage("index_content.html"),
 		seoReportTpl: mustParsePage("analyzer_content.html"),
 		reportsTpl:   mustParsePage("reports_content.html"),
@@ -405,6 +420,45 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate PASETO token
+	v2 := paseto.NewV2()
+	now := time.Now()
+	exp := now.Add(24 * time.Hour)
+
+	claims := map[string]interface{}{
+		"sub":   user.ID,
+		"name":  user.Name,
+		"email": user.Email,
+		"iat":   now.Format(time.RFC3339),
+		"exp":   exp.Format(time.RFC3339),
+	}
+
+	token, err := v2.Encrypt(s.pasetoKey, claims, nil)
+	if err != nil {
+		log.Printf("error generating paseto token: %v", err)
+		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // true in prod
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_user",
+		Value:    user.Name,
+		Path:     "/",
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -413,6 +467,29 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			"name":  user.Name,
 			"email": user.Email,
 		},
+	})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_user",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: false,
+		MaxAge:   -1,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Logged out successfully!",
 	})
 }
 
