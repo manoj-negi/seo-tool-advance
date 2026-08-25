@@ -102,7 +102,7 @@
       const input = document.getElementById('home-domain-input');
       const domain = input.value.trim();
       if (!domain) { input.focus(); return; }
-      window.location.href = '/seo-report?url=' + encodeURIComponent(domain);
+      window.location.href = '/seo-report?url=' + encodeURIComponent(domain) + '&max_pages=25';
     }
 
     document.getElementById('home-domain-input').addEventListener('keydown', e => {
