@@ -35,8 +35,14 @@
 
   <!-- AUTH MODAL -->
   <div id="auth-modal-backdrop" onclick="if(event.target===this) closeAuthModal()"
-    class="hidden fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-6">
+    style="display:none;" class="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.05)] p-6 animate-[modalIn_0.2s_ease]">
+      <style>
+        @keyframes modalIn {
+          from { opacity:0; transform:scale(0.96) translateY(8px); }
+          to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+      </style>
       <button onclick="closeAuthModal()" aria-label="Close"
         class="absolute top-4 right-4 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-md transition">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -121,12 +127,12 @@
 
     function openAuthModal(tab) {
       setAuthTab(tab || 'login');
-      document.getElementById('auth-modal-backdrop').classList.remove('hidden');
+      document.getElementById('auth-modal-backdrop').style.display = 'flex';
       document.body.style.overflow = 'hidden';
     }
 
     function closeAuthModal() {
-      document.getElementById('auth-modal-backdrop').classList.add('hidden');
+      document.getElementById('auth-modal-backdrop').style.display = 'none';
       document.body.style.overflow = '';
     }
 
