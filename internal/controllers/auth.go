@@ -178,3 +178,87 @@ func (c *Controller) HandleLogout(w http.ResponseWriter, r *http.Request) {
 		"message": "Logged out successfully!",
 	})
 }
+
+func (c *Controller) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	cookie, err := r.Cookie("auth_token")
+	if err != nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	v2 := paseto.NewV2()
+	var claims map[string]interface{}
+	err = v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil)
+	if err != nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	userID, _ := claims["user_id"].(string)
+	name, _ := claims["name"].(string)
+	email, _ := claims["email"].(string)
+
+	if userID == "" {
+		if sub, ok := claims["sub"].(string); ok {
+			userID = sub
+		}
+	}
+
+	if userID == "" {
+		http.Error(w, `{"error":"invalid token claims"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Issue fresh token
+	now := time.Now()
+	exp := now.Add(24 * time.Hour)
+
+	newClaims := map[string]interface{}{
+		"sub":     userID,
+		"user_id": userID,
+		"name":    name,
+		"email":   email,
+		"iat":     now.Format(time.RFC3339),
+		"exp":     exp.Format(time.RFC3339),
+	}
+
+	token, err := v2.Encrypt(c.PasetoKey, newClaims, nil)
+	if err != nil {
+		log.Printf("error refreshing paseto token: %v", err)
+		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_user",
+		Value:    name,
+		Path:     "/",
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"user": map[string]string{
+			"name":  name,
+			"email": email,
+		},
+	})
+}

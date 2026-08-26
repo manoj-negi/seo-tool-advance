@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 	"seo-crawler/internal/controllers"
+	"seo-crawler/internal/middleware"
 )
 
 func cors(next http.HandlerFunc) http.HandlerFunc {
@@ -21,6 +22,8 @@ func cors(next http.HandlerFunc) http.HandlerFunc {
 func SetupRoutes(ctrl *controllers.Controller) *http.ServeMux {
 	mux := http.NewServeMux()
 
+	loginLimiter := middleware.NewLoginRateLimiter()
+
 	// Serve embedded UI
 	mux.HandleFunc("/", ctrl.HandleHomepage)
 	mux.HandleFunc("/seo-report", ctrl.HandleSeoReport)
@@ -32,8 +35,9 @@ func SetupRoutes(ctrl *controllers.Controller) *http.ServeMux {
 	mux.HandleFunc("/api/results", cors(ctrl.HandleResults))
 	mux.HandleFunc("/api/reports", cors(ctrl.HandleReportsList))
 	mux.HandleFunc("/api/auth/signup", cors(ctrl.HandleSignup))
-	mux.HandleFunc("/api/auth/login", cors(ctrl.HandleLogin))
+	mux.HandleFunc("/api/auth/login", cors(loginLimiter.Middleware(ctrl.HandleLogin)))
 	mux.HandleFunc("/api/auth/logout", cors(ctrl.HandleLogout))
+	mux.HandleFunc("/api/auth/refresh", cors(ctrl.HandleRefresh))
 
 	return mux
 }

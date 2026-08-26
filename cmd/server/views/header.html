@@ -207,7 +207,7 @@
       return null;
     }
 
-    function updateAuthUI() {
+    async function updateAuthUI() {
       const username = getCookie('auth_user');
       const unauth = document.getElementById('nav-unauth');
       const auth = document.getElementById('nav-auth');
@@ -218,6 +218,8 @@
         auth.classList.remove('hidden');
         auth.classList.add('flex');
         userSpan.innerText = username;
+        // Silent token refresh in background
+        fetch('/api/auth/refresh', { method: 'POST' }).catch(() => {});
       } else {
         unauth.classList.remove('hidden');
         auth.classList.add('hidden');
