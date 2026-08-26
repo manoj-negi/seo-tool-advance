@@ -947,6 +947,68 @@
         + driRow('Permissions-Policy', `<span style="color:${cMuted(r.permissions_policy)}">${r.permissions_policy ? '✓ Present' : 'Not set'}</span>`);
     }
 
+    function buildBrokenLinksHtml(r) {
+      const links = r.broken_links || [];
+      if (links.length === 0) {
+        return '<span class="text-emerald-400 text-[11px]">✓ No broken links detected</span>';
+      }
+      return `<div class="flex flex-col gap-1.5">${links.map(l => {
+        const status = l.status_code ? `<span class="ml-auto shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/10 border border-red-500/30 text-red-400">${l.status_code}</span>` : '<span class="ml-auto shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400">Timeout</span>';
+        return `<div class="flex items-start gap-2 px-2.5 py-1.5 rounded-md border bg-red-500/[0.05] border-red-500/20 text-[11px]">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 shrink-0 mt-[1px] text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          <span class="text-slate-200 font-mono break-all flex-1">${escHtml(l.href)}</span>
+          ${status}</div>`;
+      }).join('')}</div>`;
+    }
+
+    function buildCWVHtml(r) {
+      const hints = r.cwv_hints || [];
+      if (hints.length === 0) {
+        return '<span class="text-emerald-400 text-[11px]">✓ No Core Web Vitals issues detected</span>';
+      }
+      return `<div class="flex flex-col gap-1.5">${hints.map(h =>
+        `<div class="flex items-start gap-2 px-2.5 py-1.5 rounded-md border bg-amber-500/[0.06] border-amber-500/20 text-[11px]">
+          <span class="shrink-0 mt-[1px]">⚡</span>
+          <span class="text-slate-100">${escHtml(h)}</span></div>`
+      ).join('')}</div>`;
+    }
+
+    function buildDuplicateHtml(r) {
+      if (!r.duplicate_of) {
+        return '<span class="text-emerald-400 text-[11px]">✓ No duplicate title/description detected</span>';
+      }
+      return `<div class="flex items-start gap-2 px-2.5 py-2 rounded-md border bg-amber-500/[0.07] border-amber-500/25 text-[11px]">
+        <span class="text-amber-400 font-bold shrink-0">⚠</span>
+        <div class="text-slate-100">
+          This page has the <strong>same title &amp; meta description</strong> as:
+          <div class="mt-1 font-mono text-blue-400 break-all">${escHtml(r.duplicate_of)}</div>
+        </div></div>`;
+    }
+
+    function buildJSONLDIssuesHtml(r) {
+      const schema = r.schema_types || [];
+      const issues = r.jsonld_issues || [];
+      if (schema.length === 0 && issues.length === 0) {
+        return '<span class="text-slate-400 text-[11px]">No JSON-LD structured data found on this page</span>';
+      }
+      let html = '';
+      if (schema.length > 0) {
+        html += `<div class="mb-2.5 flex flex-wrap gap-1">${schema.map(t =>
+          `<span class="px-2 py-0.5 rounded text-[10px] font-semibold border bg-blue-500/10 border-blue-500/25 text-blue-300">${escHtml(t)}</span>`
+        ).join('')}</div>`;
+      }
+      if (issues.length === 0) {
+        html += '<span class="text-emerald-400 text-[11px]">✓ All detected schema fields are valid</span>';
+      } else {
+        html += `<div class="flex flex-col gap-1.5">${issues.map(i =>
+          `<div class="flex items-start gap-2 px-2.5 py-1.5 rounded-md border bg-red-500/[0.06] border-red-500/20 text-[11px]">
+            <span class="text-red-400 font-bold shrink-0">✗</span>
+            <span class="text-slate-100">${escHtml(i)}</span></div>`
+        ).join('')}</div>`;
+      }
+      return html;
+    }
+
     function buildDetailBlocksHtml(r) {
       const headingsHtml = buildHeadingsHtml(r);
       const imagesHtml = buildImagesHtml(r);
@@ -961,6 +1023,10 @@
         detailBlock('💬', 'Social Share Preview', buildSocialCard(r)),
         detailBlock('🏷', 'Structured Data (Schema.org)', buildSchemaBlock(r)),
         detailBlock('⚡', 'SEO Checks', issuesHtml),
+        detailBlock('🔗🚫', 'Broken Links', buildBrokenLinksHtml(r)),
+        detailBlock('⚡📊', 'Core Web Vitals Hints', buildCWVHtml(r)),
+        r.duplicate_of ? detailBlock('🔁', 'Duplicate Content Warning', buildDuplicateHtml(r)) : '',
+        detailBlock('{}', 'JSON-LD Validation', buildJSONLDIssuesHtml(r)),
         detailBlock('📝', 'Heading Structure', `<div class="font-mono text-[11px] leading-[1.9]">${headingsHtml}</div>`),
         detailBlock('🖼', `Images (${(r.images || []).length} total)`, imagesHtml + imgTipsHtml),
         detailBlock('📣', 'Open Graph / Social', ogHtml),
