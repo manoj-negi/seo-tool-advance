@@ -82,6 +82,7 @@ type CheckResult struct {
 
 type Job struct {
 	ID          string      `json:"job_id"`
+	UserID      string      `json:"user_id,omitempty"`
 	Status      string      `json:"status"`
 	Domain      string      `json:"domain"`
 	Progress    int         `json:"progress"`

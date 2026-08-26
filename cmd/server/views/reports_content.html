@@ -5,7 +5,7 @@
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 class="text-2xl sm:text-[28px] font-extrabold text-slate-50 mb-1.5">Saved Reports</h1>
-          <p class="text-slate-400 text-sm">Every audit your clients have run, in one place.</p>
+          <p class="text-slate-400 text-sm">All audits you've run, in one place. Sign in to see your history.</p>
         </div>
         <a href="/seo-report"
           class="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition whitespace-nowrap">+ New Audit</a>
@@ -16,6 +16,18 @@
   <!-- REPORTS TABLE -->
   <section class="max-w-[1400px] mx-auto px-6 lg:px-10 py-8">
     <div id="reports-loading" class="text-center py-16 text-slate-400">Loading reports…</div>
+
+    <!-- Guest state: not signed in -->
+    <div id="reports-guest" class="hidden text-center py-20 px-5">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 text-3xl mb-5">🔐</div>
+      <div class="text-lg font-extrabold text-slate-50 mb-2">Sign in to view your reports</div>
+      <div class="text-slate-400 text-sm max-w-xs mx-auto mb-6">Your audit history is private. Sign in to see all the reports saved to your account.</div>
+      <button onclick="openAuthModal('login')"
+        class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition">
+        Sign In to Continue
+      </button>
+    </div>
+
     <div id="reports-empty" class="hidden text-center py-16 px-5 text-slate-400">
       <div class="text-4xl mb-3">📭</div>
       <div class="text-base font-semibold text-slate-100 mb-1.5">No reports yet</div>
@@ -61,22 +73,35 @@
     }
 
     async function loadReports() {
+      const loadingEl  = document.getElementById('reports-loading');
+      const guestEl    = document.getElementById('reports-guest');
+      const emptyEl    = document.getElementById('reports-empty');
+      const tableEl    = document.getElementById('reports-table-wrap');
+
       try {
-        const res = await fetch('/api/reports');
+        const res  = await fetch('/api/reports');
         const data = await res.json();
+
+        loadingEl.style.display = 'none';
+
+        if (!data.is_logged_in) {
+          guestEl.classList.remove('hidden');
+          return;
+        }
+
         REPORTS = data.reports || [];
+
+        if (REPORTS.length === 0) {
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+        tableEl.classList.remove('hidden');
+        renderReports();
+
       } catch (err) {
-        REPORTS = [];
+        loadingEl.style.display = 'none';
+        guestEl.classList.remove('hidden');
       }
-
-      document.getElementById('reports-loading').style.display = 'none';
-
-      if (REPORTS.length === 0) {
-        document.getElementById('reports-empty').classList.remove('hidden');
-        return;
-      }
-      document.getElementById('reports-table-wrap').classList.remove('hidden');
-      renderReports();
     }
 
     function renderReports() {

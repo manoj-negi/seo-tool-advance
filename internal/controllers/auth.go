@@ -111,11 +111,12 @@ func (c *Controller) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	exp := now.Add(24 * time.Hour)
 
 	claims := map[string]interface{}{
-		"sub":   user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"iat":   now.Format(time.RFC3339),
-		"exp":   exp.Format(time.RFC3339),
+		"sub":     user.ID,
+		"user_id": user.ID,
+		"name":    user.Name,
+		"email":   user.Email,
+		"iat":     now.Format(time.RFC3339),
+		"exp":     exp.Format(time.RFC3339),
 	}
 
 	token, err := v2.Encrypt(c.PasetoKey, claims, nil)

@@ -29,6 +29,7 @@ type Store struct {
 // individual result fields.
 type reportDoc struct {
 	JobID       string     `bson:"_id"`
+	UserID      string     `bson:"user_id"`
 	Domain      string     `bson:"domain"`
 	CreatedAt   time.Time  `bson:"created_at"`
 	CompletedAt *time.Time `bson:"completed_at,omitempty"`
@@ -45,10 +46,17 @@ func New(client *mongo.Client) (*Store, error) {
 	defer cancel()
 
 	reports := client.Database("auditly").Collection("reports")
+	// Index on created_at (for default sort)
 	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "created_at", Value: -1}},
 	}); err != nil {
 		return nil, fmt.Errorf("create index: %w", err)
+	}
+	// Index on user_id (for per-user report listing)
+	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "user_id", Value: 1}},
+	}); err != nil {
+		return nil, fmt.Errorf("create user_id index: %w", err)
 	}
 
 	users := client.Database("auditly").Collection("users")
@@ -65,6 +73,7 @@ func New(client *mongo.Client) (*Store, error) {
 // ReportSummary is one row in the Reports list table.
 type ReportSummary struct {
 	JobID       string     `json:"job_id"`
+	UserID      string     `json:"user_id,omitempty"`
 	Domain      string     `json:"domain"`
 	CreatedAt   time.Time  `json:"created_at"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
@@ -82,6 +91,7 @@ func (s *Store) SaveReport(job *models.Job) error {
 
 	doc := reportDoc{
 		JobID:       job.ID,
+		UserID:      job.UserID,
 		Domain:      job.Domain,
 		CreatedAt:   job.CreatedAt,
 		CompletedAt: job.CompletedAt,
@@ -101,15 +111,19 @@ func (s *Store) SaveReport(job *models.Job) error {
 	return nil
 }
 
-// ListReports returns every saved report, most recent first.
-func (s *Store) ListReports() ([]ReportSummary, error) {
+// ListReports returns saved reports, most recent first.
+// If userID is non-empty, only that user's reports are returned.
+// If userID is empty (guest), an empty list is returned.
+func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
+
+	filter := bson.M{"user_id": userID}
 
 	opts := options.Find().
 		SetSort(bson.D{{Key: "created_at", Value: -1}}).
 		SetProjection(bson.M{"results_json": 0})
-	cur, err := s.reports.Find(ctx, bson.M{}, opts)
+	cur, err := s.reports.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("list reports: %w", err)
 	}
@@ -123,6 +137,7 @@ func (s *Store) ListReports() ([]ReportSummary, error) {
 		}
 		out = append(out, ReportSummary{
 			JobID:       d.JobID,
+			UserID:      d.UserID,
 			Domain:      d.Domain,
 			CreatedAt:   d.CreatedAt,
 			CompletedAt: d.CompletedAt,

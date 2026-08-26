@@ -17,6 +17,24 @@ import (
 	"github.com/o1egl/paseto/v2"
 )
 
+// getUserID extracts the authenticated user's ID from the PASETO auth_token cookie.
+// Returns an empty string if the user is not authenticated or the token is invalid.
+func (c *Controller) getUserID(r *http.Request) string {
+	cookie, err := r.Cookie("auth_token")
+	if err != nil {
+		return ""
+	}
+	v2 := paseto.NewV2()
+	var claims map[string]interface{}
+	if err := v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil); err != nil {
+		return ""
+	}
+	if id, ok := claims["user_id"].(string); ok {
+		return id
+	}
+	return ""
+}
+
 func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 	domain := r.URL.Query().Get("domain")
 	if domain == "" {
@@ -29,24 +47,17 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(mp, "%d", &maxPages)
 	}
 
-	if maxPages > 25 {
-		cookie, err := r.Cookie("auth_token")
-		if err != nil {
-			http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
-			return
-		}
-		v2 := paseto.NewV2()
-		var claims map[string]interface{}
-		err = v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil)
-		if err != nil {
-			http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
-			return
-		}
+	// Enforce auth for large crawls
+	userID := c.getUserID(r)
+	if maxPages > 25 && userID == "" {
+		http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
+		return
 	}
 
 	jobID := fmt.Sprintf("%s_%d", domain, time.Now().Unix())
 	job := &models.Job{
 		ID:        jobID,
+		UserID:    userID,
 		Status:    "fetching_sitemap",
 		Domain:    domain,
 		CreatedAt: time.Now(),
@@ -214,7 +225,8 @@ func (c *Controller) HandleResults(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Controller) HandleReportsList(w http.ResponseWriter, r *http.Request) {
-	reports, err := c.Store.ListReports()
+	userID := c.getUserID(r)
+	reports, err := c.Store.ListReports(userID)
 	if err != nil {
 		log.Printf("failed to list reports: %v", err)
 		http.Error(w, `{"error":"failed to list reports"}`, http.StatusInternalServerError)
@@ -223,6 +235,7 @@ func (c *Controller) HandleReportsList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"reports": reports,
+		"reports":      reports,
+		"is_logged_in": userID != "",
 	})
 }
