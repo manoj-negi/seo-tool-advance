@@ -670,6 +670,10 @@
             document.getElementById('progress-bar').style.width = pct + '%';
             document.getElementById('progress-title').textContent = `Analysing pages... (${done}/${total})`;
             document.getElementById('progress-sub').textContent = pct + '%';
+          } else if (status === 'checking_links') {
+            document.getElementById('progress-bar').style.width = '98%';
+            document.getElementById('progress-title').textContent = 'Checking broken links & finalising...';
+            document.getElementById('progress-sub').textContent = '98%';
           }
 
           if (status === 'complete' || (done > 0 && done % 5 === 0)) {

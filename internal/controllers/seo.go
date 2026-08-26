@@ -148,8 +148,16 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 
 	close(done)
 
-	// Post-crawl: broken link check + duplicate content detection
-	checkBrokenLinks(context.Background(), job)
+	c.JobsMu.Lock()
+	job.Progress = len(job.Results)
+	job.Status = "checking_links"
+	c.JobsMu.Unlock()
+
+	// Post-crawl: broken link check + duplicate content detection (with 6s total timeout limit)
+	linkCtx, linkCancel := context.WithTimeout(context.Background(), 6*time.Second)
+	checkBrokenLinks(linkCtx, job)
+	linkCancel()
+
 	detectDuplicates(job)
 
 	c.JobsMu.Lock()
@@ -170,7 +178,7 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 // and records 4xx/5xx responses or timeouts as BrokenLink entries.
 func checkBrokenLinks(ctx context.Context, job *models.Job) {
 	httpClient := &http.Client{
-		Timeout: 8 * time.Second,
+		Timeout: 3 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > 5 {
 				return http.ErrUseLastResponse
