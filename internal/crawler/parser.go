@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -53,6 +54,7 @@ func (p *Parser) Parse(html string, pageURL string, fetchResult *FetchResult) *m
 	p.parseLinks(doc, r, pageURL)
 	p.parseWordCount(doc, r)
 	p.parseSchema(doc, r)
+	p.parseCWVHints(doc, r)
 
 	return r
 }
@@ -242,13 +244,106 @@ func (p *Parser) parseWordCount(doc *goquery.Document, r *models.SEOResult) {
 
 func (p *Parser) parseSchema(doc *goquery.Document, r *models.SEOResult) {
 	doc.Find("script[type='application/ld+json']").Each(func(i int, s *goquery.Selection) {
-		jsonText := s.Text()
+		jsonText := strings.TrimSpace(s.Text())
+		if jsonText == "" {
+			return
+		}
+
+		// Extract @type values
 		re := regexp.MustCompile(`"@type"\s*:\s*"([^"]+)"`)
 		matches := re.FindAllStringSubmatch(jsonText, -1)
 		for _, match := range matches {
 			if len(match) > 1 {
 				r.SchemaTypes = append(r.SchemaTypes, match[1])
 			}
+		}
+
+		// Validate JSON-LD: check required fields per @type
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonText), &data); err != nil {
+			r.JSONLDIssues = append(r.JSONLDIssues, fmt.Sprintf("Invalid JSON-LD (block %d): %s", i+1, err.Error()))
+			return
+		}
+
+		schemaType, _ := data["@type"].(string)
+		switch schemaType {
+		case "Article", "NewsArticle", "BlogPosting":
+			for _, field := range []string{"headline", "author", "datePublished"} {
+				if _, ok := data[field]; !ok {
+					r.JSONLDIssues = append(r.JSONLDIssues,
+						fmt.Sprintf("JSON-LD %s missing required field: %s", schemaType, field))
+				}
+			}
+		case "Product":
+			for _, field := range []string{"name", "offers"} {
+				if _, ok := data[field]; !ok {
+					r.JSONLDIssues = append(r.JSONLDIssues,
+						fmt.Sprintf("JSON-LD Product missing required field: %s", field))
+				}
+			}
+		case "Organization":
+			for _, field := range []string{"name", "url"} {
+				if _, ok := data[field]; !ok {
+					r.JSONLDIssues = append(r.JSONLDIssues,
+						fmt.Sprintf("JSON-LD Organization missing required field: %s", field))
+				}
+			}
+		case "LocalBusiness":
+			for _, field := range []string{"name", "address", "telephone"} {
+				if _, ok := data[field]; !ok {
+					r.JSONLDIssues = append(r.JSONLDIssues,
+						fmt.Sprintf("JSON-LD LocalBusiness missing recommended field: %s", field))
+				}
+			}
+		case "BreadcrumbList":
+			if _, ok := data["itemListElement"]; !ok {
+				r.JSONLDIssues = append(r.JSONLDIssues, "JSON-LD BreadcrumbList missing itemListElement")
+			}
+		case "FAQPage":
+			if _, ok := data["mainEntity"]; !ok {
+				r.JSONLDIssues = append(r.JSONLDIssues, "JSON-LD FAQPage missing mainEntity")
+			}
+		}
+	})
+}
+
+// parseCWVHints detects common Core Web Vitals performance issues:
+//   - Render-blocking <script> tags in <head> without async/defer
+//   - Missing <link rel="preload"> for critical resources
+//   - @font-face rules without font-display (causes layout shift / FOIT)
+func (p *Parser) parseCWVHints(doc *goquery.Document, r *models.SEOResult) {
+	// 1. Render-blocking scripts in <head>
+	blockingScripts := 0
+	doc.Find("head script[src]").Each(func(_ int, s *goquery.Selection) {
+		_, hasAsync := s.Attr("async")
+		_, hasDefer := s.Attr("defer")
+		_, hasModule := s.Attr("type") // type=module is deferred by default
+		if !hasAsync && !hasDefer && !hasModule {
+			blockingScripts++
+		}
+	})
+	if blockingScripts > 0 {
+		r.CWVHints = append(r.CWVHints,
+			fmt.Sprintf("%d render-blocking <script> tag(s) in <head> — add async or defer", blockingScripts))
+	}
+
+	// 2. Check for preload hints on LCP candidates (large images, hero fonts)
+	hasPreload := false
+	doc.Find("link[rel='preload']").Each(func(_ int, _ *goquery.Selection) {
+		hasPreload = true
+	})
+	if !hasPreload {
+		r.CWVHints = append(r.CWVHints,
+			"No <link rel=\"preload\"> tags — consider preloading critical fonts, LCP images, or key CSS")
+	}
+
+	// 3. font-display check inside inline <style> blocks
+	doc.Find("style").Each(func(_ int, s *goquery.Selection) {
+		css := s.Text()
+		if strings.Contains(css, "@font-face") && !strings.Contains(css, "font-display") {
+			r.CWVHints = append(r.CWVHints,
+				"@font-face rule found without font-display — add font-display:swap to prevent FOIT")
+			return // flag once per page, not per block
 		}
 	})
 }

@@ -37,6 +37,10 @@ type SEOResult struct {
 	Passed                []CheckResult       `json:"passed"`
 	Score                 int                 `json:"score"`
 	RobotsBlocked         bool                `json:"robots_blocked,omitempty"`
+	BrokenLinks           []BrokenLink        `json:"broken_links,omitempty"`
+	CWVHints              []string            `json:"cwv_hints,omitempty"`
+	DuplicateOf           string              `json:"duplicate_of,omitempty"`
+	JSONLDIssues          []string            `json:"jsonld_issues,omitempty"`
 	Error                 string              `json:"error,omitempty"`
 }
 
@@ -79,6 +83,12 @@ type LinkStats struct {
 type CheckResult struct {
 	Msg    string `json:"msg"`
 	Points int    `json:"points"`
+}
+
+type BrokenLink struct {
+	Href       string `json:"href"`
+	StatusCode int    `json:"status_code"`
+	Error      string `json:"error,omitempty"`
 }
 
 type Job struct {

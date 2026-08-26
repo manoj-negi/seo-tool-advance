@@ -2,11 +2,14 @@ package controllers
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"seo-crawler/internal/crawler"
@@ -145,6 +148,10 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 
 	close(done)
 
+	// Post-crawl: broken link check + duplicate content detection
+	checkBrokenLinks(context.Background(), job)
+	detectDuplicates(job)
+
 	c.JobsMu.Lock()
 	job.Progress = len(job.Results)
 	job.Status = "complete"
@@ -155,6 +162,105 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 	if len(job.Results) > 0 {
 		if err := c.Store.SaveReport(job); err != nil {
 			log.Printf("failed to save report for job %s: %v", job.ID, err)
+		}
+	}
+}
+
+// checkBrokenLinks concurrently HEAD-checks all outgoing links on every page
+// and records 4xx/5xx responses or timeouts as BrokenLink entries.
+func checkBrokenLinks(ctx context.Context, job *models.Job) {
+	httpClient := &http.Client{
+		Timeout: 8 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 5 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+
+	sem := make(chan struct{}, 20) // max 20 concurrent link checks
+
+	for i := range job.Results {
+		res := &job.Results[i]
+		if len(res.Links) == 0 {
+			continue
+		}
+
+		// Resolve base for relative URLs
+		base, _ := url.Parse(res.URL)
+
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+
+		for _, link := range res.Links {
+			href := link.Href
+			if href == "" || strings.HasPrefix(href, "#") ||
+				strings.HasPrefix(href, "mailto:") || strings.HasPrefix(href, "tel:") {
+				continue
+			}
+
+			// Resolve relative URLs
+			if !strings.HasPrefix(href, "http") && base != nil {
+				if ref, err := url.Parse(href); err == nil {
+					href = base.ResolveReference(ref).String()
+				}
+			}
+			if !strings.HasPrefix(href, "http") {
+				continue
+			}
+
+			wg.Add(1)
+			go func(h string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				req, err := http.NewRequestWithContext(ctx, http.MethodHead, h, nil)
+				if err != nil {
+					return
+				}
+				req.Header.Set("User-Agent", "SEOAnalyser/2.0")
+
+				resp, err := httpClient.Do(req)
+				if err != nil {
+					mu.Lock()
+					res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
+						Href:  h,
+						Error: "timeout or connection error",
+					})
+					mu.Unlock()
+					return
+				}
+				resp.Body.Close()
+				if resp.StatusCode == 404 || resp.StatusCode >= 500 {
+					mu.Lock()
+					res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
+						Href:       h,
+						StatusCode: resp.StatusCode,
+					})
+					mu.Unlock()
+				}
+			}(href)
+		}
+		wg.Wait()
+	}
+}
+
+// detectDuplicates hashes each page's title+description and flags duplicates.
+func detectDuplicates(job *models.Job) {
+	seen := make(map[string]string) // hash -> first URL
+	for i := range job.Results {
+		res := &job.Results[i]
+		key := strings.TrimSpace(res.Title) + "||" + strings.TrimSpace(res.MetaDescription)
+		if key == "||" {
+			continue // both empty — skip
+		}
+		hash := fmt.Sprintf("%x", md5.Sum([]byte(key)))
+		if first, exists := seen[hash]; exists {
+			res.DuplicateOf = first
+		} else {
+			seen[hash] = res.URL
 		}
 	}
 }
