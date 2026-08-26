@@ -190,7 +190,7 @@
   </div>
 
   <!-- SUMMARY -->
-  <div id="summary-section" class="border-b border-white/10">
+  <div id="summary-section" style="display:none;" class="border-b border-white/10">
     <div class="max-w-[1400px] mx-auto px-6 lg:px-10 py-6">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
         <h2 class="text-base font-bold flex items-center gap-2">📊 Summary</h2>
@@ -507,8 +507,7 @@
       const loggedIn = !!getCookie('auth_user');
       if (maxPages > 25 && !loggedIn) {
         openAuthModal('login');
-        alert('Please sign in to crawl more than 25 pages.');
-        document.getElementById('max-pages').value = "25";
+        selectPageLimit(25, '25 pages');
         return;
       }
 
@@ -527,6 +526,7 @@
       document.getElementById('stat-sitemap').textContent = '—';
 
       document.getElementById('progress-section').style.display = 'block';
+      document.getElementById('summary-section').style.display = 'none';
       document.getElementById('results-section').style.display = 'none';
       document.getElementById('analyse-btn').disabled = true;
       document.getElementById('spinner').style.display = 'block';
@@ -1182,9 +1182,9 @@
 
       if (url) {
         document.getElementById('domain-input').value = url;
-        const maxPagesParam = params.get('max_pages');
+        const maxPagesParam = parseInt(params.get('max_pages'), 10);
         if (maxPagesParam) {
-          document.getElementById('max-pages').value = maxPagesParam;
+          selectPageLimit(maxPagesParam, maxPagesParam === 1 ? '1 page (Exact URL)' : maxPagesParam + ' pages');
         }
         startAnalysis();
       }
