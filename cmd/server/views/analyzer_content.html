@@ -302,7 +302,8 @@
 
     let sortState = { key: null, dir: 'asc' };
     let columnFilters = {};
-    let visibleCols = new Set(COLUMNS.filter(c => !c.alwaysVisible).map(c => c.key));
+    const DEFAULT_COLS = new Set(['url', 'score', 'status', 'title', 'meta_description', 'images']);
+    let visibleCols = new Set(DEFAULT_COLS);
     let currentPage = 1;
     let pageSize = 25;
 
@@ -433,7 +434,7 @@
     }
 
     function resetColumns() {
-      visibleCols = new Set(COLUMNS.filter(c => !c.alwaysVisible).map(c => c.key));
+      visibleCols = new Set(DEFAULT_COLS);
       renderColumnPanel();
       applyColumnVisibility();
     }
