@@ -24,19 +24,24 @@ type Store struct {
 }
 
 // reportDoc is the on-disk shape of one report in the "reports" collection.
-// Results are kept as a single marshaled JSON blob (mirroring the previous
-// SQLite column) rather than a native BSON array, since nothing queries into
-// individual result fields.
+//
+// Results are stored as a native BSON array so MongoDB can query individual
+// page fields (e.g. score, status_code) without application-side parsing.
+//
+// ResultsJSONLegacy is kept read-only (omitempty) so that old documents
+// written with the previous JSON-blob format can still be decoded gracefully.
 type reportDoc struct {
-	JobID       string     `bson:"_id"`
-	UserID      string     `bson:"user_id"`
-	Domain      string     `bson:"domain"`
-	CreatedAt   time.Time  `bson:"created_at"`
-	CompletedAt *time.Time `bson:"completed_at,omitempty"`
-	PagesTotal  int        `bson:"pages_total"`
-	AvgScore    int        `bson:"avg_score"`
-	SitemapURL  string     `bson:"sitemap_url"`
-	ResultsJSON string     `bson:"results_json"`
+	JobID             string              `bson:"_id"`
+	UserID            string              `bson:"user_id"`
+	Domain            string              `bson:"domain"`
+	CreatedAt         time.Time           `bson:"created_at"`
+	CompletedAt       *time.Time          `bson:"completed_at,omitempty"`
+	PagesTotal        int                 `bson:"pages_total"`
+	AvgScore          int                 `bson:"avg_score"`
+	SitemapURL        string              `bson:"sitemap_url"`
+	Results           []models.SEOResult  `bson:"results"`
+	// Legacy field — populated only when reading old JSON-blob documents.
+	ResultsJSONLegacy string              `bson:"results_json,omitempty"`
 }
 
 // New initializes the Store using an existing connected MongoDB client
@@ -46,17 +51,28 @@ func New(client *mongo.Client) (*Store, error) {
 	defer cancel()
 
 	reports := client.Database("auditly").Collection("reports")
-	// Index on created_at (for default sort)
+
+	// Index on created_at (default sort for report list)
 	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "created_at", Value: -1}},
 	}); err != nil {
-		return nil, fmt.Errorf("create index: %w", err)
+		return nil, fmt.Errorf("create created_at index: %w", err)
 	}
-	// Index on user_id (for per-user report listing)
+	// Index on user_id (per-user report listing)
 	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "user_id", Value: 1}},
 	}); err != nil {
 		return nil, fmt.Errorf("create user_id index: %w", err)
+	}
+	// Compound index to enable per-user score queries:
+	//   db.reports.find({"results.score": {$lt: 50}, user_id: "..."})
+	if _, err := reports.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "results.score", Value: 1},
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("create results.score index: %w", err)
 	}
 
 	users := client.Database("auditly").Collection("users")
@@ -81,14 +97,9 @@ type ReportSummary struct {
 	AvgScore    int        `json:"avg_score"`
 }
 
-// SaveReport persists a completed job. Safe to call multiple times for the
-// same job ID (e.g. re-saving) — the document is replaced.
+// SaveReport persists a completed job as a native BSON document.
+// Safe to call multiple times for the same job ID — the document is replaced.
 func (s *Store) SaveReport(job *models.Job) error {
-	resultsJSON, err := json.Marshal(job.Results)
-	if err != nil {
-		return fmt.Errorf("marshal results: %w", err)
-	}
-
 	doc := reportDoc{
 		JobID:       job.ID,
 		UserID:      job.UserID,
@@ -98,21 +109,20 @@ func (s *Store) SaveReport(job *models.Job) error {
 		PagesTotal:  len(job.Results),
 		AvgScore:    averageScore(job.Results),
 		SitemapURL:  job.SitemapURL,
-		ResultsJSON: string(resultsJSON),
+		Results:     job.Results,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	_, err = s.reports.ReplaceOne(ctx, bson.M{"_id": job.ID}, doc, options.Replace().SetUpsert(true))
+	_, err := s.reports.ReplaceOne(ctx, bson.M{"_id": job.ID}, doc, options.Replace().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("save report: %w", err)
 	}
 	return nil
 }
 
-// ListReports returns saved reports, most recent first.
-// If userID is non-empty, only that user's reports are returned.
+// ListReports returns saved reports for a user, most recent first.
 // If userID is empty (guest), an empty list is returned.
 func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -120,9 +130,11 @@ func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 
 	filter := bson.M{"user_id": userID}
 
+	// Exclude the heavy results array — summary list only needs metadata.
 	opts := options.Find().
 		SetSort(bson.D{{Key: "created_at", Value: -1}}).
-		SetProjection(bson.M{"results_json": 0})
+		SetProjection(bson.M{"results": 0, "results_json": 0})
+
 	cur, err := s.reports.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("list reports: %w", err)
@@ -148,8 +160,9 @@ func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 	return out, cur.Err()
 }
 
-// GetResults returns the stored page results for a job ID, or (nil, false) if
-// no report with that ID has been saved.
+// GetResults returns the stored page results for a job ID.
+// Falls back to the legacy results_json field for documents saved before the
+// BSON migration so old reports remain accessible.
 func (s *Store) GetResults(jobID string) ([]models.SEOResult, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -163,11 +176,21 @@ func (s *Store) GetResults(jobID string) ([]models.SEOResult, bool, error) {
 		return nil, false, fmt.Errorf("get results: %w", err)
 	}
 
-	var results []models.SEOResult
-	if err := json.Unmarshal([]byte(d.ResultsJSON), &results); err != nil {
-		return nil, false, fmt.Errorf("unmarshal results: %w", err)
+	// New documents: results stored as native BSON array
+	if len(d.Results) > 0 {
+		return d.Results, true, nil
 	}
-	return results, true, nil
+
+	// Legacy documents: fall back to JSON blob
+	if d.ResultsJSONLegacy != "" {
+		var results []models.SEOResult
+		if err := json.Unmarshal([]byte(d.ResultsJSONLegacy), &results); err != nil {
+			return nil, false, fmt.Errorf("unmarshal legacy results: %w", err)
+		}
+		return results, true, nil
+	}
+
+	return nil, true, nil // document exists but has no results
 }
 
 func averageScore(results []models.SEOResult) int {
