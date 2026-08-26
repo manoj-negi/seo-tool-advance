@@ -36,6 +36,7 @@ type SEOResult struct {
 	Warnings              []CheckResult       `json:"warnings"`
 	Passed                []CheckResult       `json:"passed"`
 	Score                 int                 `json:"score"`
+	RobotsBlocked         bool                `json:"robots_blocked,omitempty"`
 	Error                 string              `json:"error,omitempty"`
 }
 
