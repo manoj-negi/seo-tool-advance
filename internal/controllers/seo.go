@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -147,7 +148,7 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 
 	cfg := c.CrawlerCfg
 	cfg.MaxPages = maxPages
-	cr := crawler.New(cfg)
+	cr := crawler.New(cfg, c.Renderer)
 
 	done := make(chan struct{})
 	go func() {
@@ -182,8 +183,13 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 	job.Status = "checking_links"
 	c.JobsMu.Unlock()
 
-	// Post-crawl: broken link check + duplicate content detection (with 6s total timeout limit)
-	linkCtx, linkCancel := context.WithTimeout(context.Background(), 6*time.Second)
+	// Post-crawl: broken link check + duplicate content detection.
+	// The budget scales with page count — a fixed small budget on a large
+	// crawl runs out before most links are even checked, and every
+	// still-in-flight check at that point would otherwise get misreported
+	// as broken (see checkBrokenLinks' ctx.Err() guard) rather than simply
+	// not being checked.
+	linkCtx, linkCancel := context.WithTimeout(context.Background(), linkCheckBudget(len(job.Results)))
 	checkBrokenLinks(linkCtx, job)
 	linkCancel()
 
@@ -203,8 +209,25 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 	}
 }
 
-// checkBrokenLinks concurrently HEAD-checks all outgoing links on every page
-// and records 4xx/5xx responses or timeouts as BrokenLink entries.
+// linkCheckBudget scales the broken-link check's total time budget with
+// crawl size, capped to keep a single huge crawl from stalling completion
+// for too long. A fixed small budget regardless of page count was the root
+// cause of large crawls reporting most links as "broken" simply because the
+// checker ran out of time before reaching them.
+func linkCheckBudget(pageCount int) time.Duration {
+	budget := time.Duration(pageCount) * 4 * time.Second
+	if budget < 6*time.Second {
+		budget = 6 * time.Second
+	}
+	if budget > 60*time.Second {
+		budget = 60 * time.Second
+	}
+	return budget
+}
+
+// checkBrokenLinks concurrently checks all outgoing links on every page and
+// records genuinely broken ones (4xx/5xx confirmed via GET, or a real
+// connection failure) as BrokenLink entries.
 func checkBrokenLinks(ctx context.Context, job *models.Job) {
 	httpClient := &http.Client{
 		Timeout: 3 * time.Second,
@@ -257,6 +280,10 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
+				if ctx.Err() != nil {
+					return // budget already exhausted — don't check, and don't misreport
+				}
+
 				req, err := http.NewRequestWithContext(ctx, http.MethodHead, h, nil)
 				if err != nil {
 					return
@@ -265,6 +292,13 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 
 				resp, err := httpClient.Do(req)
 				if err != nil {
+					// If our own overall link-check budget already ran out,
+					// this failure means "we didn't get to finish checking
+					// this link," not "this link is broken" — recording it
+					// as broken would be a false positive. Skip silently.
+					if ctx.Err() != nil {
+						return
+					}
 					mu.Lock()
 					res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
 						Href:  h,
@@ -273,15 +307,41 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 					mu.Unlock()
 					return
 				}
+				io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
 				resp.Body.Close()
-				if resp.StatusCode == 404 || resp.StatusCode >= 500 {
-					mu.Lock()
-					res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
-						Href:       h,
-						StatusCode: resp.StatusCode,
-					})
-					mu.Unlock()
+
+				if resp.StatusCode != 404 && resp.StatusCode < 500 {
+					return
 				}
+
+				// Some servers don't implement HEAD correctly (or block it
+				// outright) and return a 404/5xx even though the same URL
+				// works fine over GET — which is what actually happens when
+				// a person clicks the link in a browser. Confirm with a GET
+				// before reporting it as broken, so we don't flag links that
+				// are only "broken" for HEAD requests.
+				statusCode := resp.StatusCode
+				getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
+				if err == nil {
+					getReq.Header.Set("User-Agent", "SEOAnalyser/2.0")
+					if getResp, err := httpClient.Do(getReq); err == nil {
+						io.Copy(io.Discard, io.LimitReader(getResp.Body, 1024))
+						getResp.Body.Close()
+						if getResp.StatusCode != 404 && getResp.StatusCode < 500 {
+							return // GET succeeds — the link isn't actually broken
+						}
+						statusCode = getResp.StatusCode
+					} else if ctx.Err() != nil {
+						return // budget ran out mid-retry — don't misreport
+					}
+				}
+
+				mu.Lock()
+				res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
+					Href:       h,
+					StatusCode: statusCode,
+				})
+				mu.Unlock()
 			}(href)
 		}
 		wg.Wait()

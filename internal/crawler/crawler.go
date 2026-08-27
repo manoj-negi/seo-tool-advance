@@ -6,23 +6,36 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"seo-crawler/internal/models"
+	"seo-crawler/internal/netguard"
+	"seo-crawler/internal/render"
 )
+
+// renderTimeout bounds a single headless-Chrome render, which is far slower
+// than a plain HTTP fetch — this must stay generous but finite so one
+// JS-heavy page can't stall a whole crawl.
+const renderTimeout = 12 * time.Second
 
 type Crawler struct {
 	config    Config
 	fetcher   *Fetcher
 	parser    *Parser
+	renderer  *render.Renderer // optional; nil disables the JS-render fallback
 	semaphore chan struct{}
 	progress  int32
 }
 
-func New(cfg Config) *Crawler {
+// New builds a Crawler. renderer may be nil, in which case pages that look
+// like empty client-rendered shells are left as-is instead of being
+// re-fetched through a headless browser.
+func New(cfg Config, renderer *render.Renderer) *Crawler {
 	return &Crawler{
 		config:    cfg,
 		fetcher:   NewFetcher(cfg),
 		parser:    NewParser(),
+		renderer:  renderer,
 		semaphore: make(chan struct{}, cfg.MaxWorkers),
 	}
 }
@@ -119,6 +132,20 @@ func (c *Crawler) analyzeURL(ctx context.Context, rawURL string) models.SEOResul
 
 	// Parse HTML using your Parser struct
 	result := c.parser.Parse(string(fetchResult.Content), rawURL, fetchResult)
+
+	// Fallback: if this looks like an empty client-rendered shell (React/
+	// Vue/Next.js etc.), re-fetch it through headless Chrome and re-parse
+	// the fully rendered HTML. Only pages that need it pay this cost —
+	// everything else stays on the fast plain-HTTP path above.
+	if c.renderer != nil && looksLikeEmptyJSShell(result.Title, result.WordCount, string(fetchResult.Content)) {
+		if err := netguard.CheckURL(rawURL); err == nil {
+			if html, err := c.renderer.Render(rawURL, renderTimeout); err == nil {
+				rendered := c.parser.Parse(html, rawURL, fetchResult)
+				rendered.RenderedWithJS = true
+				result = rendered
+			}
+		}
+	}
 
 	// Apply scoring
 	// Note: scorer is called in server layer, not here

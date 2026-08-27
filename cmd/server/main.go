@@ -14,9 +14,16 @@ import (
 	"seo-crawler/internal/config"
 	"seo-crawler/internal/controllers"
 	"seo-crawler/internal/db"
+	"seo-crawler/internal/render"
 	"seo-crawler/internal/routes"
 	"seo-crawler/internal/store"
 )
+
+// maxConcurrentRenders bounds how many headless-Chrome tabs may run at
+// once for the JS-render fallback — kept small and independent of
+// crawler.Config.MaxWorkers since each tab is far more expensive than a
+// plain HTTP fetch.
+const maxConcurrentRenders = 4
 
 //go:embed views/*.html
 var viewsFS embed.FS
@@ -40,7 +47,14 @@ func main() {
 		log.Fatalf("Failed to initialize report store: %v", err)
 	}
 
-	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS, cfg.IsProduction())
+	// The JS-render fallback shares one headless Chrome instance for the
+	// life of the process. Chrome doesn't actually launch until first used,
+	// so this is safe even in environments without Chrome installed —
+	// crawls simply skip the fallback if rendering ever fails.
+	renderer := render.New(maxConcurrentRenders)
+	defer renderer.Close()
+
+	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS, cfg.IsProduction(), renderer)
 	router := routes.SetupRoutes(ctrl, cfg.AllowedOrigins)
 
 	// 4. Configure HTTP Server with timeouts

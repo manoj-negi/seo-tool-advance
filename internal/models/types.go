@@ -42,6 +42,7 @@ type SEOResult struct {
 	DuplicateOf             string              `json:"duplicate_of,omitempty"    bson:"duplicate_of,omitempty"`
 	JSONLDIssues            []string            `json:"jsonld_issues,omitempty"   bson:"jsonld_issues,omitempty"`
 	Error                   string              `json:"error,omitempty"           bson:"error,omitempty"`
+	RenderedWithJS          bool                `json:"rendered_with_js,omitempty" bson:"rendered_with_js,omitempty"`
 }
 
 type ImageData struct {
