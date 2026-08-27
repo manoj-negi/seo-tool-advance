@@ -40,6 +40,16 @@ func (p *Parser) Parse(html string, pageURL string, fetchResult *FetchResult) *m
 		r.PermissionsPolicy = fetchResult.Headers.Get("Permissions-Policy")
 	}
 
+	// If the fetch itself failed (timeout, DNS failure, connection refused,
+	// blocked by the SSRF guard, etc.), html is empty or meaningless —
+	// goquery would happily "succeed" parsing an empty string into an empty
+	// document, silently producing a page that just looks blank instead of
+	// surfacing why. Report the real reason instead.
+	if fetchResult.Error != nil {
+		r.Error = fetchResult.Error.Error()
+		return r
+	}
+
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		r.Error = "HTML parse error: " + err.Error()
@@ -55,8 +65,20 @@ func (p *Parser) Parse(html string, pageURL string, fetchResult *FetchResult) *m
 	p.parseWordCount(doc, r)
 	p.parseSchema(doc, r)
 	p.parseCWVHints(doc, r)
+	p.parseHreflang(doc, r)
 
 	return r
+}
+
+func (p *Parser) parseHreflang(doc *goquery.Document, r *models.SEOResult) {
+	doc.Find(`link[rel="alternate"][hreflang]`).Each(func(i int, s *goquery.Selection) {
+		lang, _ := s.Attr("hreflang")
+		href, _ := s.Attr("href")
+		if lang == "" || href == "" {
+			return
+		}
+		r.Hreflang = append(r.Hreflang, models.HreflangTag{Lang: lang, Href: href})
+	})
 }
 
 func (p *Parser) parseTitle(doc *goquery.Document, r *models.SEOResult) {

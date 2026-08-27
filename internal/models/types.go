@@ -43,6 +43,19 @@ type SEOResult struct {
 	JSONLDIssues            []string            `json:"jsonld_issues,omitempty"   bson:"jsonld_issues,omitempty"`
 	Error                   string              `json:"error,omitempty"           bson:"error,omitempty"`
 	RenderedWithJS          bool                `json:"rendered_with_js,omitempty" bson:"rendered_with_js,omitempty"`
+	Hreflang                []HreflangTag       `json:"hreflang,omitempty"        bson:"hreflang,omitempty"`
+	// InternalInlinks/IsOrphan are computed post-crawl from the site-wide
+	// link graph (how many *other crawled pages* link to this one) —
+	// unlike every other field here, they aren't derived from this page's
+	// own HTML.
+	InternalInlinks int  `json:"internal_inlinks" bson:"internal_inlinks"`
+	IsOrphan        bool `json:"is_orphan"        bson:"is_orphan"`
+}
+
+// HreflangTag is one <link rel="alternate" hreflang="..."> tag found on a page.
+type HreflangTag struct {
+	Lang string `json:"lang" bson:"lang"`
+	Href string `json:"href" bson:"href"`
 }
 
 type ImageData struct {
@@ -93,18 +106,73 @@ type BrokenLink struct {
 }
 
 type Job struct {
-	ID          string      `json:"job_id"`
-	UserID      string      `json:"user_id,omitempty"`
-	Status      string      `json:"status"`
-	Domain      string      `json:"domain"`
-	Progress    int         `json:"progress"`
-	Total       int         `json:"total"`
-	SitemapURL  string      `json:"sitemap_url"`
-	URLs        []string    `json:"urls"`
-	Results     []SEOResult `json:"results"`
-	Error       string      `json:"error,omitempty"`
-	CreatedAt   time.Time   `json:"created_at"`
-	CompletedAt *time.Time  `json:"completed_at,omitempty"`
+	ID          string       `json:"job_id"`
+	UserID      string       `json:"user_id,omitempty"`
+	Status      string       `json:"status"`
+	Domain      string       `json:"domain"`
+	Progress    int          `json:"progress"`
+	Total       int          `json:"total"`
+	SitemapURL  string       `json:"sitemap_url"`
+	URLs        []string     `json:"urls"`
+	Results     []SEOResult  `json:"results"`
+	Summary     *SiteSummary `json:"summary,omitempty" bson:"summary,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	CompletedAt *time.Time   `json:"completed_at,omitempty"`
+}
+
+// SiteSummary aggregates signals that are already computed per-page into
+// report-wide rollups — e.g. "12 broken links across 4 pages" instead of
+// requiring a reader to manually scan every page's own BrokenLinks list.
+type SiteSummary struct {
+	BrokenLinks    BrokenLinksSummary `json:"broken_links"    bson:"broken_links"`
+	Duplicates     DuplicatesSummary  `json:"duplicates"      bson:"duplicates"`
+	OrphanPages    []string           `json:"orphan_pages"    bson:"orphan_pages"`
+	ThinContent    ThinContentSummary `json:"thin_content"    bson:"thin_content"`
+	HreflangIssues []HreflangIssue    `json:"hreflang_issues" bson:"hreflang_issues"`
+}
+
+type BrokenLinksSummary struct {
+	TotalBrokenLinks int                  `json:"total_broken_links" bson:"total_broken_links"`
+	PagesAffected    int                  `json:"pages_affected"     bson:"pages_affected"`
+	Items            []BrokenLinkSiteItem `json:"items"              bson:"items"`
+}
+
+// BrokenLinkSiteItem is one broken link in the site-wide rollup — the same
+// per-page BrokenLink, plus which page it was found on.
+type BrokenLinkSiteItem struct {
+	PageURL    string `json:"page_url"              bson:"page_url"`
+	Href       string `json:"href"                  bson:"href"`
+	StatusCode int    `json:"status_code,omitempty" bson:"status_code,omitempty"`
+	Error      string `json:"error,omitempty"       bson:"error,omitempty"`
+}
+
+type DuplicatesSummary struct {
+	GroupCount int              `json:"group_count" bson:"group_count"`
+	PageCount  int              `json:"page_count"  bson:"page_count"` // pages involved in any duplicate group
+	Groups     []DuplicateGroup `json:"groups"      bson:"groups"`
+}
+
+// DuplicateGroup is a set of pages that share the same title+description.
+type DuplicateGroup struct {
+	Title       string   `json:"title"       bson:"title"`
+	Description string   `json:"description" bson:"description"`
+	URLs        []string `json:"urls"        bson:"urls"`
+}
+
+type ThinContentSummary struct {
+	Count int      `json:"count" bson:"count"`
+	Pages []string `json:"pages" bson:"pages"`
+}
+
+// HreflangIssue flags a hreflang tag whose target page (when it's also one
+// of the pages we crawled) doesn't link back with a matching hreflang tag —
+// Google requires this reciprocity for the annotations to be honored at all.
+type HreflangIssue struct {
+	PageURL string `json:"page_url" bson:"page_url"`
+	Lang    string `json:"lang"     bson:"lang"`
+	Href    string `json:"href"     bson:"href"`
+	Issue   string `json:"issue"    bson:"issue"`
 }
 
 type User struct {

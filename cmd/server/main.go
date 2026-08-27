@@ -25,6 +25,16 @@ import (
 // plain HTTP fetch.
 const maxConcurrentRenders = 4
 
+// Finished jobs are swept out of the in-memory Jobs map on this schedule.
+// jobMaxAge is generous — long enough that a client polling a completed
+// job still finds it in memory rather than falling back to the (slower)
+// MongoDB read — while still bounding memory growth on a long-running
+// process instead of keeping every job forever.
+const (
+	jobJanitorInterval = 10 * time.Minute
+	jobMaxAge          = time.Hour
+)
+
 //go:embed views/*.html
 var viewsFS embed.FS
 
@@ -69,6 +79,10 @@ func main() {
 	// 5. Setup Graceful Shutdown with Signal Context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Sweep finished jobs out of memory periodically; stops automatically
+	// when ctx is cancelled on shutdown.
+	ctrl.StartJobJanitor(ctx, jobJanitorInterval, jobMaxAge)
 
 	// Run HTTP server in background goroutine
 	go func() {

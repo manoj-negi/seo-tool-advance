@@ -6,5 +6,21 @@ services:
     volumes:
       - mongo-data:/data/db
 
+  app:
+    build: .
+    ports:
+      - "8081:8081"
+    # Reuses the same .env used for local `go run` (PASETO_SYMMETRIC_KEY,
+    # etc.); MONGO_URI/PORT are overridden below since the app needs to
+    # reach MongoDB by its service name on the compose network, not
+    # localhost.
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - PORT=8081
+    depends_on:
+      - mongo
+
 volumes:
   mongo-data:

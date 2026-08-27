@@ -31,17 +31,18 @@ type Store struct {
 // ResultsJSONLegacy is kept read-only (omitempty) so that old documents
 // written with the previous JSON-blob format can still be decoded gracefully.
 type reportDoc struct {
-	JobID             string              `bson:"_id"`
-	UserID            string              `bson:"user_id"`
-	Domain            string              `bson:"domain"`
-	CreatedAt         time.Time           `bson:"created_at"`
-	CompletedAt       *time.Time          `bson:"completed_at,omitempty"`
-	PagesTotal        int                 `bson:"pages_total"`
-	AvgScore          int                 `bson:"avg_score"`
-	SitemapURL        string              `bson:"sitemap_url"`
-	Results           []models.SEOResult  `bson:"results"`
+	JobID       string              `bson:"_id"`
+	UserID      string              `bson:"user_id"`
+	Domain      string              `bson:"domain"`
+	CreatedAt   time.Time           `bson:"created_at"`
+	CompletedAt *time.Time          `bson:"completed_at,omitempty"`
+	PagesTotal  int                 `bson:"pages_total"`
+	AvgScore    int                 `bson:"avg_score"`
+	SitemapURL  string              `bson:"sitemap_url"`
+	Results     []models.SEOResult  `bson:"results"`
+	Summary     *models.SiteSummary `bson:"summary,omitempty"`
 	// Legacy field — populated only when reading old JSON-blob documents.
-	ResultsJSONLegacy string              `bson:"results_json,omitempty"`
+	ResultsJSONLegacy string `bson:"results_json,omitempty"`
 }
 
 // New initializes the Store using an existing connected MongoDB client
@@ -97,6 +98,13 @@ type ReportSummary struct {
 	AvgScore    int        `json:"avg_score"`
 }
 
+// ScorePoint is one point on a domain's score-over-time trend.
+type ScorePoint struct {
+	JobID     string    `json:"job_id"`
+	CreatedAt time.Time `json:"created_at"`
+	AvgScore  int       `json:"avg_score"`
+}
+
 // SaveReport persists a completed job as a native BSON document.
 // Safe to call multiple times for the same job ID — the document is replaced.
 func (s *Store) SaveReport(job *models.Job) error {
@@ -110,6 +118,7 @@ func (s *Store) SaveReport(job *models.Job) error {
 		AvgScore:    averageScore(job.Results),
 		SitemapURL:  job.SitemapURL,
 		Results:     job.Results,
+		Summary:     job.Summary,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -160,39 +169,75 @@ func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 	return out, cur.Err()
 }
 
-// GetResults returns the stored page results for a job ID, along with the
-// UserID that owns the report (empty for guest reports) so callers can
-// enforce access control before returning data to a requester.
-// Falls back to the legacy results_json field for documents saved before the
-// BSON migration so old reports remain accessible.
-func (s *Store) GetResults(jobID string) (results []models.SEOResult, ownerID string, found bool, err error) {
+// GetScoreTrend returns a domain's average-score history for one user,
+// oldest first — a domain re-crawled several times shows whether its SEO
+// health is improving or regressing over time. Guest reports (empty
+// userID) are never returned here, matching ListReports' behavior, since
+// there's no way to scope "which guest" a trend belongs to.
+func (s *Store) GetScoreTrend(userID, domain string) ([]ScorePoint, error) {
+	if userID == "" {
+		return nil, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	filter := bson.M{"user_id": userID, "domain": domain}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: 1}}).
+		SetProjection(bson.M{"_id": 1, "created_at": 1, "avg_score": 1})
+
+	cur, err := s.reports.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("get score trend: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var out []ScorePoint
+	for cur.Next(ctx) {
+		var d reportDoc
+		if err := cur.Decode(&d); err != nil {
+			return nil, fmt.Errorf("scan trend point: %w", err)
+		}
+		out = append(out, ScorePoint{JobID: d.JobID, CreatedAt: d.CreatedAt, AvgScore: d.AvgScore})
+	}
+	return out, cur.Err()
+}
+
+// GetResults returns the stored page results and site-wide summary for a
+// job ID, along with the UserID that owns the report (empty for guest
+// reports) so callers can enforce access control before returning data to
+// a requester. Falls back to the legacy results_json field for documents
+// saved before the BSON migration so old reports remain accessible (those
+// predate SiteSummary too, so summary comes back nil for them).
+func (s *Store) GetResults(jobID string) (results []models.SEOResult, summary *models.SiteSummary, ownerID string, found bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	var d reportDoc
 	err = s.reports.FindOne(ctx, bson.M{"_id": jobID}).Decode(&d)
 	if err == mongo.ErrNoDocuments {
-		return nil, "", false, nil
+		return nil, nil, "", false, nil
 	}
 	if err != nil {
-		return nil, "", false, fmt.Errorf("get results: %w", err)
+		return nil, nil, "", false, fmt.Errorf("get results: %w", err)
 	}
 
 	// New documents: results stored as native BSON array
 	if len(d.Results) > 0 {
-		return d.Results, d.UserID, true, nil
+		return d.Results, d.Summary, d.UserID, true, nil
 	}
 
 	// Legacy documents: fall back to JSON blob
 	if d.ResultsJSONLegacy != "" {
 		var legacyResults []models.SEOResult
 		if err := json.Unmarshal([]byte(d.ResultsJSONLegacy), &legacyResults); err != nil {
-			return nil, "", false, fmt.Errorf("unmarshal legacy results: %w", err)
+			return nil, nil, "", false, fmt.Errorf("unmarshal legacy results: %w", err)
 		}
-		return legacyResults, d.UserID, true, nil
+		return legacyResults, d.Summary, d.UserID, true, nil
 	}
 
-	return nil, d.UserID, true, nil // document exists but has no results
+	return nil, d.Summary, d.UserID, true, nil // document exists but has no results
 }
 
 func averageScore(results []models.SEOResult) int {

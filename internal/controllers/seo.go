@@ -41,6 +41,48 @@ func randomJobSuffix() string {
 	return hex.EncodeToString(b)
 }
 
+// StartJobJanitor periodically evicts finished jobs (status "complete" or
+// "error") older than maxAge from the in-memory Jobs map. Completed jobs
+// with results are already persisted to MongoDB via Store.SaveReport, so
+// evicting them here just frees memory — HandleStatus/HandleResults
+// transparently fall back to the stored report once a job is no longer in
+// memory. Without this, Jobs grows forever on a long-running process, since
+// nothing else ever removes an entry. Stops when ctx is cancelled, so the
+// caller can tie its lifetime to server shutdown.
+func (c *Controller) StartJobJanitor(ctx context.Context, interval, maxAge time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				c.evictFinishedJobs(maxAge)
+			}
+		}
+	}()
+}
+
+func (c *Controller) evictFinishedJobs(maxAge time.Duration) {
+	cutoff := time.Now().Add(-maxAge)
+
+	c.JobsMu.Lock()
+	defer c.JobsMu.Unlock()
+	for id, job := range c.Jobs {
+		if job.Status != "complete" && job.Status != "error" {
+			continue // still running — never evict an in-progress job
+		}
+		finishedAt := job.CreatedAt
+		if job.CompletedAt != nil {
+			finishedAt = *job.CompletedAt
+		}
+		if finishedAt.Before(cutoff) {
+			delete(c.Jobs, id)
+		}
+	}
+}
+
 // getUserID extracts the authenticated user's ID from the PASETO auth_token cookie.
 // Returns an empty string if the user is not authenticated or the token is invalid.
 func (c *Controller) getUserID(r *http.Request) string {
@@ -121,9 +163,11 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 		sf := sitemap.NewFetcher()
 		urls, sitemapURL, err = sf.Discover(job.Domain)
 		if err != nil {
+			now := time.Now()
 			c.JobsMu.Lock()
 			job.Status = "error"
 			job.Error = err.Error()
+			job.CompletedAt = &now
 			c.JobsMu.Unlock()
 			return
 		}
@@ -196,6 +240,11 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 	detectDuplicates(job)
 
 	c.JobsMu.Lock()
+	// Aggregates broken links, duplicates, thin content, the internal link
+	// graph, and hreflang reciprocity into one site-wide summary. Held
+	// under the write lock since it also sets per-page InternalInlinks/
+	// IsOrphan fields that HandleResults reads concurrently.
+	job.Summary = buildSiteSummary(job)
 	job.Progress = len(job.Results)
 	job.Status = "complete"
 	now := time.Now()
@@ -280,72 +329,69 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				if ctx.Err() != nil {
-					return // budget already exhausted — don't check, and don't misreport
-				}
-
-				req, err := http.NewRequestWithContext(ctx, http.MethodHead, h, nil)
-				if err != nil {
-					return
-				}
-				req.Header.Set("User-Agent", "SEOAnalyser/2.0")
-
-				resp, err := httpClient.Do(req)
-				if err != nil {
-					// If our own overall link-check budget already ran out,
-					// this failure means "we didn't get to finish checking
-					// this link," not "this link is broken" — recording it
-					// as broken would be a false positive. Skip silently.
-					if ctx.Err() != nil {
-						return
-					}
+				if bl := checkLinkBroken(ctx, httpClient, h); bl != nil {
 					mu.Lock()
-					res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
-						Href:  h,
-						Error: "timeout or connection error",
-					})
+					res.BrokenLinks = append(res.BrokenLinks, *bl)
 					mu.Unlock()
-					return
 				}
-				io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
-				resp.Body.Close()
-
-				if resp.StatusCode != 404 && resp.StatusCode < 500 {
-					return
-				}
-
-				// Some servers don't implement HEAD correctly (or block it
-				// outright) and return a 404/5xx even though the same URL
-				// works fine over GET — which is what actually happens when
-				// a person clicks the link in a browser. Confirm with a GET
-				// before reporting it as broken, so we don't flag links that
-				// are only "broken" for HEAD requests.
-				statusCode := resp.StatusCode
-				getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
-				if err == nil {
-					getReq.Header.Set("User-Agent", "SEOAnalyser/2.0")
-					if getResp, err := httpClient.Do(getReq); err == nil {
-						io.Copy(io.Discard, io.LimitReader(getResp.Body, 1024))
-						getResp.Body.Close()
-						if getResp.StatusCode != 404 && getResp.StatusCode < 500 {
-							return // GET succeeds — the link isn't actually broken
-						}
-						statusCode = getResp.StatusCode
-					} else if ctx.Err() != nil {
-						return // budget ran out mid-retry — don't misreport
-					}
-				}
-
-				mu.Lock()
-				res.BrokenLinks = append(res.BrokenLinks, models.BrokenLink{
-					Href:       h,
-					StatusCode: statusCode,
-				})
-				mu.Unlock()
 			}(href)
 		}
 		wg.Wait()
 	}
+}
+
+// checkLinkBroken checks a single URL with HEAD, and returns a BrokenLink
+// describing why it's broken — or nil if it's fine. Separated out from
+// checkBrokenLinks so it can be unit-tested directly against a local test
+// server (checkBrokenLinks itself pre-filters every URL through netguard,
+// which would reject a loopback test server before this logic ever ran).
+func checkLinkBroken(ctx context.Context, client *http.Client, href string) *models.BrokenLink {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, href, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "SEOAnalyser/2.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// If our own overall link-check budget already ran out, this
+		// failure means "we didn't get to finish checking this link," not
+		// "this link is broken" — reporting it as broken would be a false
+		// positive. Skip silently.
+		if ctx.Err() != nil {
+			return nil
+		}
+		return &models.BrokenLink{Href: href, Error: "timeout or connection error"}
+	}
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	resp.Body.Close()
+
+	if resp.StatusCode != 404 && resp.StatusCode < 500 {
+		return nil
+	}
+
+	// Some servers don't implement HEAD correctly (or block it outright)
+	// and return a 404/5xx even though the same URL works fine over GET —
+	// which is what actually happens when a person clicks the link in a
+	// browser. Confirm with a GET before reporting it as broken, so we
+	// don't flag links that are only "broken" for HEAD requests.
+	statusCode := resp.StatusCode
+	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, href, nil)
+	if err == nil {
+		getReq.Header.Set("User-Agent", "SEOAnalyser/2.0")
+		if getResp, err := client.Do(getReq); err == nil {
+			io.Copy(io.Discard, io.LimitReader(getResp.Body, 1024))
+			getResp.Body.Close()
+			if getResp.StatusCode != 404 && getResp.StatusCode < 500 {
+				return nil // GET succeeds — the link isn't actually broken
+			}
+			statusCode = getResp.StatusCode
+		} else if ctx.Err() != nil {
+			return nil // budget ran out mid-retry — don't misreport
+		}
+	}
+
+	return &models.BrokenLink{Href: href, StatusCode: statusCode}
 }
 
 // detectDuplicates hashes each page's title+description and flags duplicates.
@@ -422,18 +468,20 @@ func (c *Controller) HandleResults(w http.ResponseWriter, r *http.Request) {
 		resultsCopy := make([]models.SEOResult, len(job.Results))
 		copy(resultsCopy, job.Results)
 		status := job.Status
+		summary := job.Summary
 		c.JobsMu.RUnlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"results": resultsCopy,
 			"status":  status,
+			"summary": summary,
 		})
 		return
 	}
 	c.JobsMu.RUnlock()
 
-	results, ownerID, found, err := c.Store.GetResults(jobID)
+	results, summary, ownerID, found, err := c.Store.GetResults(jobID)
 	if err != nil {
 		log.Printf("failed to load report %s: %v", jobID, err)
 		http.Error(w, `{"error":"failed to load report"}`, http.StatusInternalServerError)
@@ -452,6 +500,7 @@ func (c *Controller) HandleResults(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"results": results,
 		"status":  "complete",
+		"summary": summary,
 	})
 }
 
@@ -468,5 +517,35 @@ func (c *Controller) HandleReportsList(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"reports":      reports,
 		"is_logged_in": userID != "",
+	})
+}
+
+// HandleScoreTrend returns a domain's average-score history for the
+// logged-in user, so repeated crawls of the same domain can be charted as a
+// trend rather than viewed as disconnected one-off reports.
+func (c *Controller) HandleScoreTrend(w http.ResponseWriter, r *http.Request) {
+	domain := r.URL.Query().Get("domain")
+	if domain == "" {
+		http.Error(w, `{"error":"domain required"}`, http.StatusBadRequest)
+		return
+	}
+
+	userID := c.getUserID(r)
+	if userID == "" {
+		http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
+		return
+	}
+
+	points, err := c.Store.GetScoreTrend(userID, domain)
+	if err != nil {
+		log.Printf("failed to get score trend for %s: %v", domain, err)
+		http.Error(w, `{"error":"failed to load trend"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"domain": domain,
+		"points": points,
 	})
 }

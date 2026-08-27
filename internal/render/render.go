@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
 
@@ -80,4 +81,40 @@ func (r *Renderer) Render(rawURL string, timeout time.Duration) (string, error) 
 		return "", fmt.Errorf("render %s: %w", rawURL, err)
 	}
 	return html, nil
+}
+
+// PrintPDF navigates to fileURL (a "file://..." path is expected — the PDF
+// export builds a self-contained report HTML file rather than driving the
+// live authenticated web app, so there's no session/cookie to carry into
+// the headless browser) and returns the page rendered as a PDF.
+func (r *Renderer) PrintPDF(fileURL string, timeout time.Duration) ([]byte, error) {
+	r.sem <- struct{}{}
+	defer func() { <-r.sem }()
+
+	tabCtx, cancelTab := chromedp.NewContext(r.allocCtx)
+	defer cancelTab()
+
+	tabCtx, cancelTimeout := context.WithTimeout(tabCtx, timeout)
+	defer cancelTimeout()
+
+	var pdfData []byte
+	err := chromedp.Run(tabCtx,
+		chromedp.Navigate(fileURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			data, _, err := page.PrintToPDF().
+				WithPrintBackground(true).
+				WithMarginTop(0.4).WithMarginBottom(0.4).
+				WithMarginLeft(0.4).WithMarginRight(0.4).
+				Do(ctx)
+			if err != nil {
+				return err
+			}
+			pdfData = data
+			return nil
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("print pdf %s: %w", fileURL, err)
+	}
+	return pdfData, nil
 }
