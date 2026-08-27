@@ -8,8 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"seo-crawler/internal/netguard"
+
 	"github.com/PuerkitoBio/goquery"
 )
+
+// maxSitemapBytes caps how much of a single sitemap response we'll read,
+// mirroring the caps already applied to robots.txt and page fetches —
+// without it, a huge or malicious sitemap could exhaust server memory.
+const maxSitemapBytes = 20 * 1024 * 1024 // 20MB
 
 // Fetcher handles sitemap.xml discovery
 type Fetcher struct {
@@ -18,7 +25,10 @@ type Fetcher struct {
 
 func NewFetcher() *Fetcher {
 	return &Fetcher{
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{
+			Timeout:       10 * time.Second,
+			CheckRedirect: netguard.CheckRedirect,
+		},
 	}
 }
 
@@ -38,8 +48,11 @@ func (sf *Fetcher) Discover(baseURL string) ([]string, string, error) {
 
 	// Check robots.txt first
 	robotsURL := baseURL + "/robots.txt"
+	if err := netguard.CheckURL(robotsURL); err != nil {
+		return nil, "", fmt.Errorf("domain resolves to a disallowed address: %w", err)
+	}
 	if resp, err := sf.client.Get(robotsURL); err == nil {
-		if body, err := io.ReadAll(resp.Body); err == nil {
+		if body, err := io.ReadAll(io.LimitReader(resp.Body, maxSitemapBytes)); err == nil {
 			resp.Body.Close()
 			lines := strings.Split(string(body), "\n")
 			for _, line := range lines {
@@ -68,6 +81,10 @@ func (sf *Fetcher) Discover(baseURL string) ([]string, string, error) {
 }
 
 func (sf *Fetcher) fetchSitemap(smURL string) ([]string, error) {
+	if err := netguard.CheckURL(smURL); err != nil {
+		return nil, err
+	}
+
 	resp, err := sf.client.Get(smURL)
 	if err != nil {
 		return nil, err
@@ -78,7 +95,7 @@ func (sf *Fetcher) fetchSitemap(smURL string) ([]string, error) {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSitemapBytes))
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,17 @@ type Config struct {
 	PasetoKey          []byte
 	Environment        string
 	ShutdownTimeoutSec int
+	// AllowedOrigins lists origins permitted to make credentialed
+	// cross-origin requests to the API (from ALLOWED_ORIGINS, comma
+	// separated). Empty means no cross-origin requests are allowed —
+	// the correct default for a same-origin app.
+	AllowedOrigins []string
+}
+
+// IsProduction reports whether the app is running in a production-like
+// environment, where insecure development defaults must not be used.
+func (c *Config) IsProduction() bool {
+	return strings.EqualFold(c.Environment, "production")
 }
 
 // Load reads configuration from environment variables (loading .env if available)
@@ -46,16 +57,31 @@ func Load() (*Config, error) {
 		}
 	}
 
+	isProd := strings.EqualFold(envMode, "production")
+
 	// Format PASETO 32-byte key
 	rawKey := []byte(os.Getenv("PASETO_SYMMETRIC_KEY"))
 	var pKey []byte
 	if len(rawKey) == 0 {
+		if isProd {
+			return nil, fmt.Errorf("PASETO_SYMMETRIC_KEY must be set when ENV=production")
+		}
+		log.Println("WARNING: PASETO_SYMMETRIC_KEY not set — using an insecure default key (development only)")
 		pKey = []byte("yellow-submarine-yellow-submarine") // 32 bytes default
 	} else if len(rawKey) < 32 {
 		pKey = make([]byte, 32)
 		copy(pKey, rawKey)
 	} else {
 		pKey = rawKey[:32]
+	}
+
+	var allowedOrigins []string
+	if raw := os.Getenv("ALLOWED_ORIGINS"); raw != "" {
+		for _, o := range strings.Split(raw, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				allowedOrigins = append(allowedOrigins, o)
+			}
+		}
 	}
 
 	cfg := &Config{
@@ -65,6 +91,7 @@ func Load() (*Config, error) {
 		PasetoKey:          pKey,
 		Environment:        envMode,
 		ShutdownTimeoutSec: shutdownTimeout,
+		AllowedOrigins:     allowedOrigins,
 	}
 
 	if err := cfg.Validate(); err != nil {

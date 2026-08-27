@@ -160,37 +160,39 @@ func (s *Store) ListReports(userID string) ([]ReportSummary, error) {
 	return out, cur.Err()
 }
 
-// GetResults returns the stored page results for a job ID.
+// GetResults returns the stored page results for a job ID, along with the
+// UserID that owns the report (empty for guest reports) so callers can
+// enforce access control before returning data to a requester.
 // Falls back to the legacy results_json field for documents saved before the
 // BSON migration so old reports remain accessible.
-func (s *Store) GetResults(jobID string) ([]models.SEOResult, bool, error) {
+func (s *Store) GetResults(jobID string) (results []models.SEOResult, ownerID string, found bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	var d reportDoc
-	err := s.reports.FindOne(ctx, bson.M{"_id": jobID}).Decode(&d)
+	err = s.reports.FindOne(ctx, bson.M{"_id": jobID}).Decode(&d)
 	if err == mongo.ErrNoDocuments {
-		return nil, false, nil
+		return nil, "", false, nil
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("get results: %w", err)
+		return nil, "", false, fmt.Errorf("get results: %w", err)
 	}
 
 	// New documents: results stored as native BSON array
 	if len(d.Results) > 0 {
-		return d.Results, true, nil
+		return d.Results, d.UserID, true, nil
 	}
 
 	// Legacy documents: fall back to JSON blob
 	if d.ResultsJSONLegacy != "" {
-		var results []models.SEOResult
-		if err := json.Unmarshal([]byte(d.ResultsJSONLegacy), &results); err != nil {
-			return nil, false, fmt.Errorf("unmarshal legacy results: %w", err)
+		var legacyResults []models.SEOResult
+		if err := json.Unmarshal([]byte(d.ResultsJSONLegacy), &legacyResults); err != nil {
+			return nil, "", false, fmt.Errorf("unmarshal legacy results: %w", err)
 		}
-		return results, true, nil
+		return legacyResults, d.UserID, true, nil
 	}
 
-	return nil, true, nil // document exists but has no results
+	return nil, d.UserID, true, nil // document exists but has no results
 }
 
 func averageScore(results []models.SEOResult) int {

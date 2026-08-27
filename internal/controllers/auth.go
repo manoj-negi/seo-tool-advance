@@ -19,6 +19,23 @@ type authRequest struct {
 	Password string `json:"password"`
 }
 
+// claimsExpired reports whether a decrypted PASETO token's "exp" claim is
+// missing, unparseable, or in the past. The cookie's own Expires attribute
+// only controls browser-side deletion — the server must independently
+// enforce expiry, since a copied/replayed cookie would otherwise remain
+// valid forever.
+func claimsExpired(claims map[string]interface{}) bool {
+	expStr, ok := claims["exp"].(string)
+	if !ok {
+		return true
+	}
+	exp, err := time.Parse(time.RFC3339, expStr)
+	if err != nil {
+		return true
+	}
+	return time.Now().After(exp)
+}
+
 func (c *Controller) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -131,7 +148,7 @@ func (c *Controller) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // true in prod
+		Secure:   c.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})
@@ -141,6 +158,7 @@ func (c *Controller) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    user.Name,
 		Path:     "/",
 		HttpOnly: false,
+		Secure:   c.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})
@@ -198,6 +216,10 @@ func (c *Controller) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
+	if claimsExpired(claims) {
+		http.Error(w, `{"error":"token expired"}`, http.StatusUnauthorized)
+		return
+	}
 
 	userID, _ := claims["user_id"].(string)
 	name, _ := claims["name"].(string)
@@ -239,7 +261,7 @@ func (c *Controller) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   c.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})
@@ -249,6 +271,7 @@ func (c *Controller) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 		Value:    name,
 		Path:     "/",
 		HttpOnly: false,
+		Secure:   c.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})

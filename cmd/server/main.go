@@ -40,8 +40,8 @@ func main() {
 		log.Fatalf("Failed to initialize report store: %v", err)
 	}
 
-	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS)
-	router := routes.SetupRoutes(ctrl)
+	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS, cfg.IsProduction())
+	router := routes.SetupRoutes(ctrl, cfg.AllowedOrigins)
 
 	// 4. Configure HTTP Server with timeouts
 	server := &http.Server{

@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"crypto/md5"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,11 +16,29 @@ import (
 
 	"seo-crawler/internal/crawler"
 	"seo-crawler/internal/models"
+	"seo-crawler/internal/netguard"
 	"seo-crawler/internal/scorer"
 	"seo-crawler/internal/sitemap"
 
 	"github.com/o1egl/paseto/v2"
 )
+
+// absoluteMaxPages is a hard ceiling on max_pages regardless of auth state,
+// so an authenticated (or otherwise bypassed) request can't kick off an
+// unbounded crawl.
+const absoluteMaxPages = 200
+
+// randomJobSuffix returns a short random hex string appended to job IDs so
+// they can't be guessed from a domain name and timestamp alone — otherwise
+// anyone could construct another user's job ID and read their report via
+// HandleStatus/HandleResults.
+func randomJobSuffix() string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
 
 // getUserID extracts the authenticated user's ID from the PASETO auth_token cookie.
 // Returns an empty string if the user is not authenticated or the token is invalid.
@@ -30,6 +50,9 @@ func (c *Controller) getUserID(r *http.Request) string {
 	v2 := paseto.NewV2()
 	var claims map[string]interface{}
 	if err := v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil); err != nil {
+		return ""
+	}
+	if claimsExpired(claims) {
 		return ""
 	}
 	if id, ok := claims["user_id"].(string); ok {
@@ -49,6 +72,12 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 	if mp := r.URL.Query().Get("max_pages"); mp != "" {
 		fmt.Sscanf(mp, "%d", &maxPages)
 	}
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	if maxPages > absoluteMaxPages {
+		maxPages = absoluteMaxPages
+	}
 
 	// Enforce auth for large crawls
 	userID := c.getUserID(r)
@@ -57,7 +86,7 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID := fmt.Sprintf("%s_%d", domain, time.Now().Unix())
+	jobID := fmt.Sprintf("%s_%d_%s", domain, time.Now().Unix(), randomJobSuffix())
 	job := &models.Job{
 		ID:        jobID,
 		UserID:    userID,
@@ -183,7 +212,7 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 			if len(via) > 5 {
 				return http.ErrUseLastResponse
 			}
-			return nil
+			return netguard.CheckURL(req.URL.String())
 		},
 	}
 
@@ -215,6 +244,10 @@ func checkBrokenLinks(ctx context.Context, job *models.Job) {
 				}
 			}
 			if !strings.HasPrefix(href, "http") {
+				continue
+			}
+
+			if err := netguard.CheckURL(href); err != nil {
 				continue
 			}
 
@@ -273,12 +306,25 @@ func detectDuplicates(job *models.Job) {
 	}
 }
 
+// jobAccessAllowed reports whether requesterID may view a job/report owned
+// by ownerID. Guest jobs (ownerID == "") stay open to anyone with the job
+// ID, matching the pre-existing no-login crawl flow; an owned job is only
+// visible to the matching authenticated user.
+func jobAccessAllowed(requesterID, ownerID string) bool {
+	return ownerID == "" || requesterID == ownerID
+}
+
 func (c *Controller) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := r.URL.Query().Get("job_id")
 	c.JobsMu.RLock()
 	job, exists := c.Jobs[jobID]
 
 	if !exists {
+		c.JobsMu.RUnlock()
+		http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
+		return
+	}
+	if !jobAccessAllowed(c.getUserID(r), job.UserID) {
 		c.JobsMu.RUnlock()
 		http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
 		return
@@ -302,10 +348,17 @@ func (c *Controller) HandleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) HandleResults(w http.ResponseWriter, r *http.Request) {
 	jobID := r.URL.Query().Get("job_id")
+	requesterID := c.getUserID(r)
+
 	c.JobsMu.RLock()
 	job, exists := c.Jobs[jobID]
 
 	if exists {
+		if !jobAccessAllowed(requesterID, job.UserID) {
+			c.JobsMu.RUnlock()
+			http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
+			return
+		}
 		resultsCopy := make([]models.SEOResult, len(job.Results))
 		copy(resultsCopy, job.Results)
 		status := job.Status
@@ -320,13 +373,17 @@ func (c *Controller) HandleResults(w http.ResponseWriter, r *http.Request) {
 	}
 	c.JobsMu.RUnlock()
 
-	results, found, err := c.Store.GetResults(jobID)
+	results, ownerID, found, err := c.Store.GetResults(jobID)
 	if err != nil {
 		log.Printf("failed to load report %s: %v", jobID, err)
 		http.Error(w, `{"error":"failed to load report"}`, http.StatusInternalServerError)
 		return
 	}
 	if !found {
+		http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
+		return
+	}
+	if !jobAccessAllowed(requesterID, ownerID) {
 		http.Error(w, `{"error":"job not found"}`, http.StatusNotFound)
 		return
 	}

@@ -1,64 +1,81 @@
 # SEO Analyser (seo-crawler)
 
-A Go backend that crawls a website's sitemap, analyses each page for on-page SEO signals, scores them, and serves the results through an embedded HTML/JS report UI.
+A Go backend that crawls a website's sitemap, analyses each page for on-page SEO
+signals, scores it out of 100, and serves the results through a server-rendered
+HTML/JS report UI. Includes account signup/login (PASETO cookie sessions) so
+users can save and revisit past reports.
 
 ## Running
 
 ```bash
-go run ./cmd/server      # do NOT run `go run cmd/server/main.go` — see note below
+go run ./cmd/server
 ```
 
-Serves on `http://localhost:8080`.
+Requires a MongoDB instance — see `docker-compose.yml` for a local one:
 
-**Important:** always run `go run ./cmd/server` (the package directory), never `go run cmd/server/main.go` (a single file). Naming a specific file tells Go to compile only that file, silently excluding sibling files in the same package like `routes.go` — this produces a `s.setupRoutes undefined` build error.
+```bash
+docker compose up -d mongo
+```
+
+Configuration is read from environment variables (or a local `.env` file, via
+`godotenv`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `8081` | HTTP listen port |
+| `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
+| `DB_NAME` | `auditly` | Database name |
+| `PASETO_SYMMETRIC_KEY` | *(dev fallback — set this in any real deployment)* | 32-byte key used to encrypt session tokens |
+| `ENV` / `ENVIRONMENT` | `development` | Environment name (logged on startup) |
+| `SHUTDOWN_TIMEOUT_SEC` | `10` | Grace period for shutting down in-flight requests on SIGTERM/SIGINT |
 
 ## Routes
 
 | Route | Serves |
 |---|---|
-| `/` | `cmd/server/homepage.html` (embedded) — marketing/landing page |
-| `/seo-report` | `cmd/server/index.html` (embedded) — the SEO crawler/report UI |
-| `/api/analyse?domain=&max_pages=` | starts a crawl job, returns `{job_id}` |
-| `/api/status?job_id=` | poll job progress/status |
-| `/api/results?job_id=` | fetch accumulated results |
+| `/` | Landing page (`cmd/server/views/index_content.html`) |
+| `/seo-report` | The SEO crawler/report UI (`analyzer_content.html`) |
+| `/reports` | Saved reports list for logged-in users (`reports_content.html`) |
+| `/api/analyse?domain=&max_pages=` | Starts a crawl job, returns `{job_id}` |
+| `/api/status?job_id=` | Poll job progress/status |
+| `/api/results?job_id=` | Fetch accumulated/complete results |
+| `/api/reports` | List the current user's saved reports |
+| `/api/auth/signup` | Create an account |
+| `/api/auth/login` | Log in, sets the `auth_token` session cookie (rate-limited) |
+| `/api/auth/logout` | Clear the session cookie |
+| `/api/auth/refresh` | Issue a fresh session cookie from a still-valid one |
 
-Route registration lives in `cmd/server/routes.go` (`setupRoutes()`), handlers and the `Server` struct live in `cmd/server/main.go`.
+Route registration lives in `internal/routes/routes.go`. Page and API handlers
+are split across `internal/controllers/` (`pages.go` for HTML pages, `seo.go`
+for the crawl/report API, `auth.go` for signup/login/session).
 
-`internal/server/` (`handlers.go`, `routes.go`, `middleware.go`) is a **dead/unused parallel implementation** — nothing in the module imports `seo-crawler/internal/server`. The real server is entirely in `cmd/server/`.
+## Architecture
 
-## `homepage.html` — known constraint
+```
+cmd/server/          entrypoint: config, DB connect, store, controllers, router, graceful shutdown
+internal/config/     env var loading + startup validation
+internal/db/         MongoDB client connection
+internal/store/      persistence: reports (crawl results) and users
+internal/controllers/ HTTP handlers (pages, crawl/report API, auth)
+internal/routes/     mux wiring + CORS
+internal/middleware/ per-IP login rate limiting
+internal/crawler/    fetch → parse pipeline (fetcher, robots.txt, HTML parser)
+internal/scorer/     100-point SEO scoring rules
+internal/sitemap/    sitemap.xml / sitemap index discovery and parsing
+internal/models/     shared result/job/user types
+```
 
-`cmd/server/homepage.html` is not hand-authored markup. It's an opaque, bundled export from an external page-builder tool: the initial HTML is just a loading placeholder (`__bundler_thumbnail`/`__bundler_loading`), and a large gzip+base64-compressed JavaScript blob (referenced by a random UUID `<script src="...">` tag) does the real work at runtime — it **replaces the entire document** once "unpacking" finishes (confirmed by inspecting the decompressed script as text; it explicitly handles state that "persists across replaceWith").
+**Crawl pipeline:** `HandleAnalyse` creates an in-memory `Job`, then
+`RunAnalysis` runs in a goroutine: discover URLs via `internal/sitemap`
+(sitemap.xml, falling back to the homepage) → concurrently fetch + parse each
+page via `internal/crawler` (respecting `robots.txt` and a per-host polite
+delay) → score each page via `internal/scorer` → post-crawl broken-link
+checking and duplicate title/description detection → persist the finished
+job to MongoDB via `internal/store`. `/api/status` and `/api/results` poll
+the in-memory `Job` while it's running, then fall back to the stored report
+once it's no longer in memory.
 
-Practical implications:
-- There is no static content in this file to read, copy, or extract a design from.
-- Any static HTML injected into `homepage.html` (e.g. a shared header/footer) will render briefly and then get wiped out when the bundle finishes loading and swaps in its own content.
-- As a result, the shared header/footer described below was added **only to `index.html`** (the `/seo-report` page), not to `homepage.html`. Revisit `homepage.html` only once a real, non-opaque design source is available for it (screenshot, Figma, or authored HTML).
-
-## `/seo-report` (`index.html`) — design/content additions
-
-### Report content — SEO & marketing signals surfaced
-
-The crawler (`internal/crawler`, `internal/scorer`, `internal/models`) already collects far more than the original table showed. Added to the per-page detail panel and summary cards (no backend changes — pure frontend surfacing):
-
-- **Google Search Preview** — SERP-style mockup (title, URL breadcrumb, description) built from `title`/`meta_description`.
-- **Social Share Preview** — Open Graph card mockup (image, title, description) from `og_tags`, with a warning callout when OG tags or `og:image` are missing.
-- **Structured Data (Schema.org)** — displays detected JSON-LD types (`schema_types`), or a warning when none are found (rich-result eligibility).
-- Summary cards: **Pages w/ Structured Data** and **Missing Open Graph** counts.
-
-(Canonical, robots meta, viewport, link stats, and security headers were already surfaced pre-existing — only the above were net-new.)
-
-Not yet implemented (backend work, next planned pass):
-- Duplicate title/meta-description detection across pages.
-- Broken internal links / redirect chain checking.
-- Thin-content flags, hreflang, orphan-page detection.
-
-### Page chrome fixes
-
-- Added a sticky **site header** (brand + `Home` / `SEO Report` nav, active link highlighted via `location.pathname`) and a **site footer** (auto-updating copyright year + same nav) to `index.html`.
-- Fixed: the `xlsx` export library was being loaded **three times** from two different CDNs (leftover `<!-- BEFORE -->` / `<!-- AFTER -->` debug comments were never cleaned up after a prior fix) — reduced to a single `jsdelivr` load.
-- Fixed a dead CSS selector `.#results-section` (invalid — mixes class and id syntax, so it silently never matched) → corrected to `#results-section`, restoring the intended mobile padding.
-
-## Architecture notes
-
-See `CLAUDE.md` for full crawl-pipeline architecture (sitemap discovery → concurrent fetch/parse → scoring → job polling) and package responsibilities.
+**Auth:** passwords are hashed with bcrypt; sessions are PASETO v2 local
+(symmetric-encryption) tokens carried in an `HttpOnly` cookie, checked for
+both signature validity and expiry on every request that needs a user ID.
+Crawls above 25 pages require a logged-in user.

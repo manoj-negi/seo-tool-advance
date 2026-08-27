@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"seo-crawler/internal/netguard"
 )
 
 type Fetcher struct {
@@ -34,9 +36,10 @@ func NewFetcher(cfg Config) *Fetcher {
 
 	return &Fetcher{
 		client: &http.Client{
-			Transport: transport,
-			Timeout:   cfg.RequestTimeout,
-			Jar:       jar, // Maintain cookies across requests
+			Transport:     transport,
+			Timeout:       cfg.RequestTimeout,
+			Jar:           jar, // Maintain cookies across requests
+			CheckRedirect: netguard.CheckRedirect,
 		},
 		config:     cfg,
 		hostDelays: make(map[string]time.Time),
@@ -45,9 +48,14 @@ func NewFetcher(cfg Config) *Fetcher {
 
 // Fetch returns *FetchResult (single return value)
 func (f *Fetcher) Fetch(ctx context.Context, rawURL string) *FetchResult {
-	f.waitForHost(rawURL)
-
 	result := &FetchResult{}
+
+	if err := netguard.CheckURL(rawURL); err != nil {
+		result.Error = err
+		return result
+	}
+
+	f.waitForHost(rawURL)
 
 	var lastErr error
 	for attempt := 0; attempt <= f.config.MaxRetries; attempt++ {
@@ -101,6 +109,11 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) *FetchResult {
 	return result
 }
 
+// waitForHost enforces PoliteDelay spacing between consecutive requests to
+// the same host. Each caller reserves its slot (a strictly increasing
+// "earliest start time" per host) under the lock, then sleeps outside the
+// lock — so requests to different hosts never block on each other, and
+// concurrent requests to the same host still queue up correctly.
 func (f *Fetcher) waitForHost(rawURL string) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -109,13 +122,15 @@ func (f *Fetcher) waitForHost(rawURL string) {
 	host := u.Host
 
 	f.delayMu.Lock()
-	defer f.delayMu.Unlock()
-
-	if lastTime, exists := f.hostDelays[host]; exists {
-		elapsed := time.Since(lastTime)
-		if elapsed < f.config.PoliteDelay {
-			time.Sleep(f.config.PoliteDelay - elapsed)
-		}
+	now := time.Now()
+	start := now
+	if next, exists := f.hostDelays[host]; exists && next.After(start) {
+		start = next
 	}
-	f.hostDelays[host] = time.Now()
+	f.hostDelays[host] = start.Add(f.config.PoliteDelay)
+	f.delayMu.Unlock()
+
+	if wait := start.Sub(now); wait > 0 {
+		time.Sleep(wait)
+	}
 }

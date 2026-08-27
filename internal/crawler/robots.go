@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"seo-crawler/internal/netguard"
 )
 
 // robotsRule represents a single Allow or Disallow directive.
@@ -59,6 +61,9 @@ func FetchRobots(ctx context.Context, baseURL string, userAgent string) *RobotsD
 		return permissive
 	}
 	robotsURL := fmt.Sprintf("%s://%s/robots.txt", u.Scheme, u.Host)
+	if err := netguard.CheckURL(robotsURL); err != nil {
+		return permissive
+	}
 
 	ctx2, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
@@ -69,7 +74,8 @@ func FetchRobots(ctx context.Context, baseURL string, userAgent string) *RobotsD
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{CheckRedirect: netguard.CheckRedirect}
+	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return permissive
 	}
