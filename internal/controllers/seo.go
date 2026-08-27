@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"seo-crawler/internal/crawler"
+	"seo-crawler/internal/mailer"
 	"seo-crawler/internal/models"
 	"seo-crawler/internal/netguard"
 	"seo-crawler/internal/scorer"
@@ -86,22 +87,32 @@ func (c *Controller) evictFinishedJobs(maxAge time.Duration) {
 // getUserID extracts the authenticated user's ID from the PASETO auth_token cookie.
 // Returns an empty string if the user is not authenticated or the token is invalid.
 func (c *Controller) getUserID(r *http.Request) string {
+	id, _ := c.getUserIDAndEmail(r)
+	return id
+}
+
+// getUserIDAndEmail decrypts the PASETO auth_token cookie and returns both
+// the user ID and email from its claims, or two empty strings if the
+// requester isn't authenticated. Kept as one function (rather than two
+// separate cookie reads) since HandleAnalyse needs the email to email the
+// finished report later, from RunAnalysis's background goroutine which has
+// no HTTP request to re-derive it from.
+func (c *Controller) getUserIDAndEmail(r *http.Request) (userID, email string) {
 	cookie, err := r.Cookie("auth_token")
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	v2 := paseto.NewV2()
 	var claims map[string]interface{}
 	if err := v2.Decrypt(cookie.Value, c.PasetoKey, &claims, nil); err != nil {
-		return ""
+		return "", ""
 	}
 	if claimsExpired(claims) {
-		return ""
+		return "", ""
 	}
-	if id, ok := claims["user_id"].(string); ok {
-		return id
-	}
-	return ""
+	id, _ := claims["user_id"].(string)
+	em, _ := claims["email"].(string)
+	return id, em
 }
 
 func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +134,7 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enforce auth for large crawls
-	userID := c.getUserID(r)
+	userID, userEmail := c.getUserIDAndEmail(r)
 	if maxPages > 25 && userID == "" {
 		http.Error(w, `{"error":"login_required"}`, http.StatusUnauthorized)
 		return
@@ -133,6 +144,7 @@ func (c *Controller) HandleAnalyse(w http.ResponseWriter, r *http.Request) {
 	job := &models.Job{
 		ID:        jobID,
 		UserID:    userID,
+		UserEmail: userEmail,
 		Status:    "fetching_sitemap",
 		Domain:    domain,
 		CreatedAt: time.Now(),
@@ -255,6 +267,34 @@ func (c *Controller) RunAnalysis(job *models.Job, maxPages int) {
 		if err := c.Store.SaveReport(job); err != nil {
 			log.Printf("failed to save report for job %s: %v", job.ID, err)
 		}
+	}
+
+	// Email the finished report to whoever kicked off the crawl, if they
+	// were logged in and SMTP is configured. Best-effort and asynchronous —
+	// a slow or failed send must never hold up (or fail) job completion.
+	if job.UserEmail != "" && c.Mailer != nil && len(job.Results) > 0 {
+		go c.emailFinishedReport(job)
+	}
+}
+
+// emailFinishedReport renders job to PDF and emails it to job.UserEmail.
+// Errors are logged, not surfaced anywhere else — by the time this runs,
+// the crawl itself has already succeeded and been saved.
+func (c *Controller) emailFinishedReport(job *models.Job) {
+	pdfData, err := c.renderJobPDF(job)
+	if err != nil {
+		log.Printf("email report: render pdf for job %s: %v", job.ID, err)
+		return
+	}
+
+	attachment := mailer.Attachment{
+		Filename: fmt.Sprintf("seo-report-%s.pdf", sanitizeFilename(job.Domain)),
+		MIMEType: "application/pdf",
+		Data:     pdfData,
+	}
+	subject := fmt.Sprintf("Your SEO report for %s is ready", job.Domain)
+	if err := c.Mailer.SendWithAttachment(job.UserEmail, subject, reportEmailHTML(job), attachment); err != nil {
+		log.Printf("failed to email report for job %s to %s: %v", job.ID, job.UserEmail, err)
 	}
 }
 

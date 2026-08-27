@@ -25,6 +25,20 @@ type Config struct {
 	// separated). Empty means no cross-origin requests are allowed —
 	// the correct default for a same-origin app.
 	AllowedOrigins []string
+	// SMTP* configure outbound transactional email (welcome messages,
+	// finished-report delivery). Any of them being empty disables email
+	// entirely rather than failing startup — it's a nice-to-have, not
+	// critical infrastructure like the database or auth key.
+	SMTPHost string
+	SMTPPort string
+	MailFrom string
+	MailPass string
+}
+
+// EmailEnabled reports whether enough SMTP configuration is present to send
+// mail at all.
+func (c *Config) EmailEnabled() bool {
+	return c.SMTPHost != "" && c.SMTPPort != "" && c.MailFrom != "" && c.MailPass != ""
 }
 
 // IsProduction reports whether the app is running in a production-like
@@ -92,6 +106,14 @@ func Load() (*Config, error) {
 		Environment:        envMode,
 		ShutdownTimeoutSec: shutdownTimeout,
 		AllowedOrigins:     allowedOrigins,
+		SMTPHost:           getEnv("SMTP_HOST", ""),
+		SMTPPort:           getEnv("SMTP_PORT", ""),
+		MailFrom:           getEnv("DB_MAIL_FROM", ""),
+		MailPass:           getEnv("DB_MAIL_PASS", ""),
+	}
+
+	if !cfg.EmailEnabled() {
+		log.Println("SMTP not fully configured — welcome/report emails are disabled")
 	}
 
 	if err := cfg.Validate(); err != nil {

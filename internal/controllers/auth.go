@@ -84,6 +84,17 @@ func (c *Controller) HandleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fire-and-forget: email delivery must never block or fail the signup
+	// response — SMTP can be slow or briefly unavailable, and account
+	// creation already succeeded regardless of whether the email lands.
+	if c.Mailer != nil {
+		go func(email, name string) {
+			if err := c.Mailer.SendHTML(email, "Welcome to Auditly!", welcomeEmailHTML(name)); err != nil {
+				log.Printf("failed to send welcome email to %s: %v", email, err)
+			}
+		}(user.Email, user.Name)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Account created successfully!"})
 }

@@ -930,6 +930,14 @@
         );
       }
 
+      if (s.sitemap_robots_conflicts?.length > 0) {
+        html += section(
+          '⚠️ Sitemap / Robots.txt Conflicts',
+          `${s.sitemap_robots_conflicts.length} page(s) listed in the sitemap but blocked by robots.txt`,
+          `<p class="text-[11px] text-slate-400 mb-2">These pages are in your sitemap.xml — telling search engines "please crawl this" — but robots.txt tells crawlers to skip them. Search engines can't index a page they're blocked from crawling, so it stays out of the sitemap's intended effect entirely.</p>${urlList(s.sitemap_robots_conflicts)}`
+        );
+      }
+
       panel.innerHTML = html;
     }
 
@@ -1262,14 +1270,40 @@
 
     function buildCWVHtml(r) {
       const hints = r.cwv_hints || [];
-      if (hints.length === 0) {
-        return '<span class="text-emerald-400 text-[11px]">✓ No Core Web Vitals issues detected</span>';
+      let html = '';
+
+      // Real measurements from a live browser (only available for pages
+      // that went through the JS-render fallback) — shown above the static
+      // heuristic hints, which apply to every page regardless.
+      if (r.cwv_measured) {
+        const lcpLevel = r.lcp_ms <= 2500 ? 'green' : r.lcp_ms <= 4000 ? 'yellow' : 'red';
+        const clsLevel = r.cls <= 0.1 ? 'green' : r.cls <= 0.25 ? 'yellow' : 'red';
+        const metricPill = (label, value, level) => {
+          const styles = { green: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', yellow: 'bg-amber-500/10 border-amber-500/30 text-amber-400', red: 'bg-red-500/10 border-red-500/30 text-red-400' };
+          return `<div class="flex-1 min-w-[140px] px-3 py-2 rounded-lg border ${styles[level]}">
+            <div class="text-[10px] uppercase tracking-wide opacity-80">${label}</div>
+            <div class="text-lg font-extrabold">${value}</div>
+          </div>`;
+        };
+        html += `<div class="mb-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">Real measurements (captured live)</div>
+          <div class="flex gap-2 flex-wrap">
+            ${metricPill('LCP', r.lcp_ms.toFixed(0) + 'ms', lcpLevel)}
+            ${metricPill('CLS', r.cls.toFixed(3), clsLevel)}
+          </div>
+        </div>`;
       }
-      return `<div class="flex flex-col gap-1.5">${hints.map(h =>
+
+      if (hints.length === 0) {
+        html += '<span class="text-emerald-400 text-[11px]">✓ No Core Web Vitals issues detected</span>';
+        return html;
+      }
+      html += `<div class="flex flex-col gap-1.5">${hints.map(h =>
         `<div class="flex items-start gap-2 px-2.5 py-1.5 rounded-md border bg-amber-500/[0.06] border-amber-500/20 text-[11px]">
           <span class="shrink-0 mt-[1px]">⚡</span>
           <span class="text-slate-100">${escHtml(h)}</span></div>`
       ).join('')}</div>`;
+      return html;
     }
 
     function buildDuplicateHtml(r) {
@@ -1323,7 +1357,7 @@
         detailBlock('🏷', 'Structured Data (Schema.org)', buildSchemaBlock(r)),
         detailBlock('⚡', 'SEO Checks', issuesHtml),
         detailBlock('🔗🚫', 'Broken Links', buildBrokenLinksHtml(r)),
-        detailBlock('⚡📊', 'Core Web Vitals Hints', buildCWVHtml(r)),
+        detailBlock('⚡📊', 'Core Web Vitals', buildCWVHtml(r)),
         r.duplicate_of ? detailBlock('🔁', 'Duplicate Content Warning', buildDuplicateHtml(r)) : '',
         detailBlock('{}', 'JSON-LD Validation', buildJSONLDIssuesHtml(r)),
         detailBlock('📝', 'Heading Structure', `<div class="font-mono text-[11px] leading-[1.9]">${headingsHtml}</div>`),

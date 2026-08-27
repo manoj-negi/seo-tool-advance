@@ -253,6 +253,33 @@ func CalculateScore(r *models.SEOResult) {
 		r.Warnings = append(r.Warnings, models.CheckResult{Msg: "Missing X-Content-Type-Options header"})
 	}
 
+	// Real Core Web Vitals (Bonus & Warnings) — only available for pages
+	// that went through the headless-Chrome render fallback, where the
+	// browser's own Performance API gives actual measurements instead of
+	// the static heuristics above. Thresholds match Google's official
+	// "good" / "needs improvement" / "poor" boundaries.
+	if r.CWVMeasured {
+		switch {
+		case r.LCPMs <= 2500:
+			r.Passed = append(r.Passed, models.CheckResult{Msg: fmt.Sprintf("Good LCP (%.0fms) — meets Core Web Vitals threshold", r.LCPMs), Points: 3})
+			score += 3
+		case r.LCPMs <= 4000:
+			r.Warnings = append(r.Warnings, models.CheckResult{Msg: fmt.Sprintf("LCP needs improvement (%.0fms) — Google's \"good\" threshold is 2500ms", r.LCPMs)})
+		default:
+			r.Issues = append(r.Issues, models.CheckResult{Msg: fmt.Sprintf("Poor LCP (%.0fms) — largest content takes too long to render, hurts ranking", r.LCPMs)})
+		}
+
+		switch {
+		case r.CLS <= 0.1:
+			r.Passed = append(r.Passed, models.CheckResult{Msg: fmt.Sprintf("Good CLS (%.2f) — page layout is stable", r.CLS), Points: 3})
+			score += 3
+		case r.CLS <= 0.25:
+			r.Warnings = append(r.Warnings, models.CheckResult{Msg: fmt.Sprintf("CLS needs improvement (%.2f) — Google's \"good\" threshold is 0.1", r.CLS)})
+		default:
+			r.Issues = append(r.Issues, models.CheckResult{Msg: fmt.Sprintf("Poor CLS (%.2f) — visible content shifts during load, hurts UX and ranking", r.CLS)})
+		}
+	}
+
 	if score > 100 {
 		score = 100
 	}

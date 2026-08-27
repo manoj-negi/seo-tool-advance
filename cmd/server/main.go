@@ -14,6 +14,7 @@ import (
 	"seo-crawler/internal/config"
 	"seo-crawler/internal/controllers"
 	"seo-crawler/internal/db"
+	"seo-crawler/internal/mailer"
 	"seo-crawler/internal/render"
 	"seo-crawler/internal/routes"
 	"seo-crawler/internal/store"
@@ -64,7 +65,14 @@ func main() {
 	renderer := render.New(maxConcurrentRenders)
 	defer renderer.Close()
 
-	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS, cfg.IsProduction(), renderer)
+	// Welcome/report emails are disabled (nil mailer) when SMTP isn't fully
+	// configured — see config.Config.EmailEnabled.
+	var mail *mailer.Mailer
+	if cfg.EmailEnabled() {
+		mail = mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.MailFrom, cfg.MailPass)
+	}
+
+	ctrl := controllers.NewController(st, cfg.PasetoKey, viewsFS, cfg.IsProduction(), renderer, mail)
 	router := routes.SetupRoutes(ctrl, cfg.AllowedOrigins)
 
 	// 4. Configure HTTP Server with timeouts

@@ -31,40 +31,14 @@ func (c *Controller) HandleExportPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if c.Renderer == nil {
-		http.Error(w, `{"error":"PDF export is unavailable on this server"}`, http.StatusServiceUnavailable)
-		return
-	}
-
-	tmpFile, err := os.CreateTemp("", "seo-report-*.html")
-	if err != nil {
-		log.Printf("export pdf: create temp file: %v", err)
-		http.Error(w, `{"error":"failed to generate report"}`, http.StatusInternalServerError)
-		return
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	if _, err := tmpFile.WriteString(buildPrintableReportHTML(job)); err != nil {
-		tmpFile.Close()
-		log.Printf("export pdf: write temp file: %v", err)
-		http.Error(w, `{"error":"failed to generate report"}`, http.StatusInternalServerError)
-		return
-	}
-	tmpFile.Close()
-
-	absPath, err := filepath.Abs(tmpPath)
-	if err != nil {
-		log.Printf("export pdf: resolve path: %v", err)
-		http.Error(w, `{"error":"failed to generate report"}`, http.StatusInternalServerError)
-		return
-	}
-	fileURL := (&url.URL{Scheme: "file", Path: absPath}).String()
-
-	pdfData, err := c.Renderer.PrintPDF(fileURL, pdfRenderTimeout)
+	pdfData, err := c.renderJobPDF(job)
 	if err != nil {
 		log.Printf("export pdf job %s: %v", jobID, err)
-		http.Error(w, `{"error":"failed to render PDF"}`, http.StatusInternalServerError)
+		if c.Renderer == nil {
+			http.Error(w, `{"error":"PDF export is unavailable on this server"}`, http.StatusServiceUnavailable)
+		} else {
+			http.Error(w, `{"error":"failed to generate report"}`, http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -72,6 +46,41 @@ func (c *Controller) HandleExportPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Write(pdfData)
+}
+
+// renderJobPDF builds the printable report HTML for job and renders it to
+// PDF via the shared headless-Chrome renderer. Shared by HandleExportPDF
+// and the automatic "email the finished report" path (seo.go) so both
+// go through the exact same temp-file-plus-PrintPDF flow.
+func (c *Controller) renderJobPDF(job *models.Job) ([]byte, error) {
+	if c.Renderer == nil {
+		return nil, fmt.Errorf("PDF rendering is unavailable (no renderer configured)")
+	}
+
+	tmpFile, err := os.CreateTemp("", "seo-report-*.html")
+	if err != nil {
+		return nil, fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.WriteString(buildPrintableReportHTML(job)); err != nil {
+		tmpFile.Close()
+		return nil, fmt.Errorf("write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	absPath, err := filepath.Abs(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve path: %w", err)
+	}
+	fileURL := (&url.URL{Scheme: "file", Path: absPath}).String()
+
+	pdfData, err := c.Renderer.PrintPDF(fileURL, pdfRenderTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("print pdf: %w", err)
+	}
+	return pdfData, nil
 }
 
 // resolveJobForExport finds a job (in-memory, falling back to the stored

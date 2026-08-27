@@ -7,6 +7,7 @@ package render
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -81,6 +82,77 @@ func (r *Renderer) Render(rawURL string, timeout time.Duration) (string, error) 
 		return "", fmt.Errorf("render %s: %w", rawURL, err)
 	}
 	return html, nil
+}
+
+// CWVMetrics holds real Core Web Vitals captured from a live browser's
+// Performance API, as opposed to the static heuristic hints computed from
+// raw HTML (internal/crawler/parser.go's parseCWVHints).
+type CWVMetrics struct {
+	LCPMs float64 `json:"lcp"` // Largest Contentful Paint, milliseconds
+	CLS   float64 `json:"cls"` // Cumulative Layout Shift, unitless score
+}
+
+// cwvObserverScript sets up PerformanceObservers for the two Core Web
+// Vitals that can be measured within a single short-lived page load
+// (LCP and CLS — INP needs real user interaction and can't be captured
+// here). Injected via Page.addScriptToEvaluateOnNewDocument so it's present
+// and running before the page's own scripts execute, catching entries from
+// the very start of the load rather than whatever's left by the time we
+// get around to evaluating something after the fact.
+const cwvObserverScript = `
+(function() {
+	window.__cwv = { lcp: 0, cls: 0 };
+	try {
+		new PerformanceObserver(function(list) {
+			var entries = list.getEntries();
+			var last = entries[entries.length - 1];
+			if (last) window.__cwv.lcp = last.renderTime || last.startTime || 0;
+		}).observe({ type: 'largest-contentful-paint', buffered: true });
+	} catch (e) {}
+	try {
+		new PerformanceObserver(function(list) {
+			list.getEntries().forEach(function(entry) {
+				if (!entry.hadRecentInput) window.__cwv.cls += entry.value;
+			});
+		}).observe({ type: 'layout-shift', buffered: true });
+	} catch (e) {}
+})();
+`
+
+// RenderWithMetrics is like Render, but also captures real LCP/CLS values
+// via the browser's own Performance API during the same page load — used
+// so JS-rendered pages get actual measurements instead of only the static
+// heuristic hints available for every page.
+func (r *Renderer) RenderWithMetrics(rawURL string, timeout time.Duration) (html string, metrics CWVMetrics, err error) {
+	r.sem <- struct{}{}
+	defer func() { <-r.sem }()
+
+	tabCtx, cancelTab := chromedp.NewContext(r.allocCtx)
+	defer cancelTab()
+
+	tabCtx, cancelTimeout := context.WithTimeout(tabCtx, timeout)
+	defer cancelTimeout()
+
+	var metricsJSON string
+	runErr := chromedp.Run(tabCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			_, scriptErr := page.AddScriptToEvaluateOnNewDocument(cwvObserverScript).Do(ctx)
+			return scriptErr
+		}),
+		chromedp.Navigate(rawURL),
+		chromedp.Sleep(1200*time.Millisecond),
+		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
+		chromedp.Evaluate(`JSON.stringify(window.__cwv || {lcp:0, cls:0})`, &metricsJSON),
+	)
+	if runErr != nil {
+		return "", CWVMetrics{}, fmt.Errorf("render with metrics %s: %w", rawURL, runErr)
+	}
+	if unmarshalErr := json.Unmarshal([]byte(metricsJSON), &metrics); unmarshalErr != nil {
+		// Metrics collection failing shouldn't discard a perfectly good
+		// render — just return the HTML with zero-value metrics.
+		return html, CWVMetrics{}, nil
+	}
+	return html, metrics, nil
 }
 
 // PrintPDF navigates to fileURL (a "file://..." path is expected — the PDF

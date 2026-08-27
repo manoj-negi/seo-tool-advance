@@ -44,8 +44,29 @@ func buildSiteSummary(job *models.Job) *models.SiteSummary {
 	crawled := buildCrawledIndex(job)
 	summary.OrphanPages = applyLinkGraph(job, crawled)
 	summary.HreflangIssues = aggregateHreflangIssues(job, crawled)
+	summary.SitemapRobotsConflicts = aggregateSitemapRobotsConflicts(job)
 
 	return summary
+}
+
+// aggregateSitemapRobotsConflicts finds pages that were listed in the
+// site's sitemap.xml — meaning the site is asking to have them crawled —
+// but got skipped during the crawl because robots.txt disallows them
+// (crawler.go marks these RobotsBlocked and never actually fetches them).
+// That contradiction only means something when the URLs actually came from
+// a discovered sitemap; a bare single-page crawl hitting a robots.txt block
+// is just "this one page is blocked," not a sitemap/robots disagreement.
+func aggregateSitemapRobotsConflicts(job *models.Job) []string {
+	if job.SitemapURL == "" {
+		return nil
+	}
+	var conflicts []string
+	for i := range job.Results {
+		if job.Results[i].RobotsBlocked {
+			conflicts = append(conflicts, job.Results[i].URL)
+		}
+	}
+	return conflicts
 }
 
 func aggregateBrokenLinks(job *models.Job) models.BrokenLinksSummary {

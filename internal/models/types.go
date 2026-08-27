@@ -50,6 +50,16 @@ type SEOResult struct {
 	// own HTML.
 	InternalInlinks int  `json:"internal_inlinks" bson:"internal_inlinks"`
 	IsOrphan        bool `json:"is_orphan"        bson:"is_orphan"`
+	// CWVMeasured/LCPMs/CLS are REAL Core Web Vitals captured from a live
+	// browser's Performance API — set only for pages that already go
+	// through the headless-Chrome render fallback (see RenderedWithJS).
+	// CWVHints above are static heuristics available for every page; these
+	// are actual measurements, only available for the subset that were
+	// rendered. LCPMs/CLS are meaningless (left at zero) when CWVMeasured
+	// is false.
+	CWVMeasured bool    `json:"cwv_measured,omitempty" bson:"cwv_measured,omitempty"`
+	LCPMs       float64 `json:"lcp_ms,omitempty"       bson:"lcp_ms,omitempty"`
+	CLS         float64 `json:"cls,omitempty"          bson:"cls,omitempty"`
 }
 
 // HreflangTag is one <link rel="alternate" hreflang="..."> tag found on a page.
@@ -106,9 +116,15 @@ type BrokenLink struct {
 }
 
 type Job struct {
-	ID          string       `json:"job_id"`
-	UserID      string       `json:"user_id,omitempty"`
-	Status      string       `json:"status"`
+	ID     string `json:"job_id"`
+	UserID string `json:"user_id,omitempty"`
+	// UserEmail is captured from the requester's session at crawl-start
+	// time so the finished report can be emailed without a DB round trip
+	// once the crawl completes in its own background goroutine (which has
+	// no HTTP request/cookie to re-derive it from). Never serialized or
+	// persisted — it's a purely transient, in-process delivery detail.
+	UserEmail string `json:"-" bson:"-"`
+	Status    string `json:"status"`
 	Domain      string       `json:"domain"`
 	Progress    int          `json:"progress"`
 	Total       int          `json:"total"`
@@ -130,6 +146,14 @@ type SiteSummary struct {
 	OrphanPages    []string           `json:"orphan_pages"    bson:"orphan_pages"`
 	ThinContent    ThinContentSummary `json:"thin_content"    bson:"thin_content"`
 	HreflangIssues []HreflangIssue    `json:"hreflang_issues" bson:"hreflang_issues"`
+	// SitemapRobotsConflicts lists URLs that were listed in the site's
+	// sitemap.xml (so the site is asking to have them crawled/indexed) but
+	// are disallowed by robots.txt (so crawlers are told to skip them) — a
+	// contradictory pair of signals that's a common real-world SEO mistake.
+	// Only populated when the crawl actually used a discovered sitemap
+	// (Job.SitemapURL != ""), since otherwise "blocked by robots.txt" just
+	// means the single requested page was blocked, not a contradiction.
+	SitemapRobotsConflicts []string `json:"sitemap_robots_conflicts" bson:"sitemap_robots_conflicts"`
 }
 
 type BrokenLinksSummary struct {

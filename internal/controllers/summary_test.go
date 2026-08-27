@@ -6,6 +6,45 @@ import (
 	"seo-crawler/internal/models"
 )
 
+func TestBuildSiteSummary_SitemapRobotsConflicts(t *testing.T) {
+	job := &models.Job{
+		SitemapURL: "https://x.com/sitemap.xml", // URLs came from a real sitemap
+		Results: []models.SEOResult{
+			{URL: "https://x.com/", RobotsBlocked: false},
+			{URL: "https://x.com/private", RobotsBlocked: true},
+			{URL: "https://x.com/admin", RobotsBlocked: true},
+		},
+	}
+
+	summary := buildSiteSummary(job)
+
+	want := map[string]bool{"https://x.com/private": true, "https://x.com/admin": true}
+	if len(summary.SitemapRobotsConflicts) != 2 {
+		t.Fatalf("SitemapRobotsConflicts = %v, want 2 entries", summary.SitemapRobotsConflicts)
+	}
+	for _, u := range summary.SitemapRobotsConflicts {
+		if !want[u] {
+			t.Errorf("unexpected URL in conflicts: %s", u)
+		}
+	}
+}
+
+func TestBuildSiteSummary_NoSitemapMeansNoConflictsReported(t *testing.T) {
+	// No SitemapURL — this was a bare single-page crawl, not sitemap-driven,
+	// so a robots block here isn't a "sitemap says X but robots blocks X"
+	// contradiction and must not be reported as one.
+	job := &models.Job{
+		Results: []models.SEOResult{
+			{URL: "https://x.com/", RobotsBlocked: true},
+		},
+	}
+
+	summary := buildSiteSummary(job)
+	if len(summary.SitemapRobotsConflicts) != 0 {
+		t.Errorf("expected no conflicts without a sitemap-driven crawl, got %v", summary.SitemapRobotsConflicts)
+	}
+}
+
 func TestBuildSiteSummary_BrokenLinksAndDuplicates(t *testing.T) {
 	job := &models.Job{Results: []models.SEOResult{
 		{

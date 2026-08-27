@@ -74,6 +74,7 @@ func buildSummaryCardsHTML(s *models.SiteSummary, pageCount int) string {
 	b.WriteString(card(len(s.OrphanPages), "Orphan Pages"))
 	b.WriteString(card(s.ThinContent.Count, "Thin Content Pages"))
 	b.WriteString(card(len(s.HreflangIssues), "Hreflang Issues"))
+	b.WriteString(card(len(s.SitemapRobotsConflicts), "Sitemap/Robots Conflicts"))
 	b.WriteString(`</div>`)
 	return b.String()
 }
@@ -125,6 +126,14 @@ func buildSiteIssuesHTML(s *models.SiteSummary) string {
 	if len(s.ThinContent.Pages) > 0 {
 		b.WriteString(`<h2>Thin Content Pages <span class="muted">(under 300 words)</span></h2><ul>`)
 		for _, u := range s.ThinContent.Pages {
+			fmt.Fprintf(&b, `<li class="url">%s</li>`, html.EscapeString(u))
+		}
+		b.WriteString(`</ul>`)
+	}
+
+	if len(s.SitemapRobotsConflicts) > 0 {
+		b.WriteString(`<h2>Sitemap / Robots.txt Conflicts <span class="muted">(listed in sitemap.xml but blocked by robots.txt)</span></h2><ul>`)
+		for _, u := range s.SitemapRobotsConflicts {
 			fmt.Fprintf(&b, `<li class="url">%s</li>`, html.EscapeString(u))
 		}
 		b.WriteString(`</ul>`)

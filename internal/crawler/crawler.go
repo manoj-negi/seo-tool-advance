@@ -139,9 +139,17 @@ func (c *Crawler) analyzeURL(ctx context.Context, rawURL string) models.SEOResul
 	// everything else stays on the fast plain-HTTP path above.
 	if c.renderer != nil && looksLikeEmptyJSShell(result.Title, result.WordCount, string(fetchResult.Content)) {
 		if err := netguard.CheckURL(rawURL); err == nil {
-			if html, err := c.renderer.Render(rawURL, renderTimeout); err == nil {
+			// RenderWithMetrics captures real Core Web Vitals (LCP, CLS)
+			// from the browser's own Performance API during this same
+			// render — since we're already paying for a real Chrome tab
+			// here, actual measurements cost nothing extra, unlike running
+			// this for every page in the crawl.
+			if html, metrics, err := c.renderer.RenderWithMetrics(rawURL, renderTimeout); err == nil {
 				rendered := c.parser.Parse(html, rawURL, fetchResult)
 				rendered.RenderedWithJS = true
+				rendered.CWVMeasured = true
+				rendered.LCPMs = metrics.LCPMs
+				rendered.CLS = metrics.CLS
 				result = rendered
 			}
 		}
