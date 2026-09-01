@@ -24,10 +24,25 @@
             class="hidden sm:inline-flex px-3.5 py-1.5 text-[13px] font-semibold rounded-md bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition whitespace-nowrap">Sign Up</button>
         </div>
         <!-- Authenticated View -->
-        <div id="nav-auth" class="hidden flex items-center gap-3.5">
-          <span class="text-[13px] font-semibold text-slate-300">Welcome, <span id="nav-username" class="text-blue-400">User</span></span>
-          <button onclick="signOut()"
-            class="px-3 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition whitespace-nowrap">Sign Out</button>
+        <div id="nav-auth" class="hidden relative">
+          <button id="account-menu-btn" onclick="toggleAccountMenu(event)"
+            class="flex items-center gap-2 px-2.5 py-1.5 text-[13px] font-semibold rounded-md border border-white/10 text-slate-100 hover:border-blue-500/50 hover:bg-white/5 transition whitespace-nowrap">
+            <span id="nav-avatar" class="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-[11px] font-bold text-white shrink-0">U</span>
+            <span id="nav-username" class="text-slate-100 max-w-[120px] truncate">User</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="account-menu" style="display:none;"
+            class="absolute right-0 top-[calc(100%+8px)] w-52 bg-slate-900 border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] py-1.5 z-50 animate-[modalIn_0.15s_ease]">
+            <button onclick="openAccountSettings()"
+              class="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-slate-200 hover:bg-white/5 transition text-left">
+              <span>⚙️</span> Account Settings
+            </button>
+            <div class="h-px bg-white/10 my-1"></div>
+            <button onclick="signOut()"
+              class="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/10 transition text-left">
+              <span>🚪</span> Sign Out
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -102,6 +117,63 @@
         <button type="submit"
           class="mt-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition">Create Account</button>
         <p class="text-center text-[11px] text-slate-500">Already have an account? <button type="button" onclick="setAuthTab('login')" class="text-blue-400 hover:underline font-semibold">Log in</button></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACCOUNT SETTINGS MODAL -->
+  <div id="account-modal-backdrop" onclick="if(event.target===this) closeAccountSettings()"
+    style="display:none;" class="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm max-h-[90vh] overflow-y-auto bg-slate-900 border border-white/10 rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.05)] p-6 animate-[modalIn_0.2s_ease]">
+      <button onclick="closeAccountSettings()" aria-label="Close"
+        class="absolute top-4 right-4 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-md transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <div class="flex items-center gap-2.5 mb-6">
+        <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-base shadow-lg shadow-blue-500/20">⚙️</span>
+        <span class="text-[15px] font-extrabold text-slate-100">Account Settings</span>
+      </div>
+
+      <div id="account-notice" class="hidden mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed"></div>
+
+      <!-- Profile -->
+      <form id="profile-form" onsubmit="return submitProfileUpdate(event)" class="flex flex-col gap-3.5 mb-6 pb-6 border-b border-white/10">
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Profile</div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Name</label>
+          <input type="text" id="settings-name" required
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Email</label>
+          <input type="email" id="settings-email" disabled
+            class="w-full bg-slate-950/50 border border-white/10 text-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none cursor-not-allowed">
+        </div>
+        <button type="submit"
+          class="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold rounded-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition">Save Name</button>
+      </form>
+
+      <!-- Password -->
+      <form id="password-form" onsubmit="return submitPasswordChange(event)" class="flex flex-col gap-3.5">
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Change Password</div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Current Password</label>
+          <input type="password" id="current-password" required autocomplete="current-password"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">New Password</label>
+          <input type="password" id="new-password" required minlength="8" placeholder="At least 8 characters" autocomplete="new-password"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 placeholder-slate-500 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Confirm New Password</label>
+          <input type="password" id="confirm-password" required minlength="8" autocomplete="new-password"
+            class="w-full bg-slate-950 border border-white/10 text-slate-100 px-3.5 py-2.5 text-sm rounded-lg outline-none focus:border-blue-500 transition">
+        </div>
+        <button type="submit"
+          class="px-4 py-2.5 bg-slate-800 border border-white/10 text-slate-100 text-sm font-semibold rounded-lg hover:border-blue-500 transition">Update Password</button>
       </form>
     </div>
   </div>
@@ -212,18 +284,19 @@
       const unauth = document.getElementById('nav-unauth');
       const auth = document.getElementById('nav-auth');
       const userSpan = document.getElementById('nav-username');
+      const avatar = document.getElementById('nav-avatar');
 
       if (username) {
         unauth.classList.add('hidden');
         auth.classList.remove('hidden');
-        auth.classList.add('flex');
         userSpan.innerText = username;
+        avatar.innerText = username.trim().charAt(0).toUpperCase() || 'U';
         // Silent token refresh in background
         fetch('/api/auth/refresh', { method: 'POST' }).catch(() => {});
       } else {
         unauth.classList.remove('hidden');
         auth.classList.add('hidden');
-        auth.classList.remove('flex');
+        document.getElementById('account-menu').style.display = 'none';
       }
 
       if (typeof window.checkDropdownLock === 'function') {
@@ -240,8 +313,114 @@
       location.reload();
     }
 
+    // ---- Account menu (dropdown) + Account Settings modal ----
+
+    function toggleAccountMenu(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('account-menu');
+      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    }
+
+    document.addEventListener('click', (e) => {
+      const btn = document.getElementById('account-menu-btn');
+      const menu = document.getElementById('account-menu');
+      if (menu && menu.style.display === 'block' && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+        menu.style.display = 'none';
+      }
+    });
+
+    function showAccountNotice(kind, msg) {
+      const notice = document.getElementById('account-notice');
+      const styles = {
+        info: 'bg-blue-500/10 border border-blue-500/25 text-blue-400',
+        success: 'bg-green-500/10 border border-green-500/25 text-green-400',
+        error: 'bg-red-500/10 border border-red-500/25 text-red-400',
+      };
+      notice.className = 'mb-4 flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed ' + (styles[kind] || styles.info);
+      notice.innerText = msg;
+      notice.classList.remove('hidden');
+    }
+
+    async function openAccountSettings() {
+      document.getElementById('account-menu').style.display = 'none';
+      document.getElementById('account-notice').classList.add('hidden');
+      document.getElementById('password-form').reset();
+
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('settings-name').value = data.name || '';
+          document.getElementById('settings-email').value = data.email || '';
+        }
+      } catch (err) {
+        console.error('Failed to load account info:', err);
+      }
+
+      document.getElementById('account-modal-backdrop').style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeAccountSettings() {
+      document.getElementById('account-modal-backdrop').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    async function submitProfileUpdate(e) {
+      e.preventDefault();
+      const name = document.getElementById('settings-name').value.trim();
+      try {
+        const res = await fetch('/api/auth/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+
+        showAccountNotice('success', data.message || 'Profile updated!');
+        document.getElementById('nav-username').innerText = name;
+        document.getElementById('nav-avatar').innerText = name.charAt(0).toUpperCase() || 'U';
+      } catch (err) {
+        showAccountNotice('error', err.message);
+      }
+      return false;
+    }
+
+    async function submitPasswordChange(e) {
+      e.preventDefault();
+      const current = document.getElementById('current-password').value;
+      const next = document.getElementById('new-password').value;
+      const confirm = document.getElementById('confirm-password').value;
+
+      if (next !== confirm) {
+        showAccountNotice('error', 'New passwords do not match.');
+        return false;
+      }
+
+      try {
+        const res = await fetch('/api/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: next }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update password');
+
+        showAccountNotice('success', data.message || 'Password updated!');
+        document.getElementById('password-form').reset();
+      } catch (err) {
+        showAccountNotice('error', err.message);
+      }
+      return false;
+    }
+
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeAuthModal();
+      if (e.key === 'Escape') {
+        closeAuthModal();
+        closeAccountSettings();
+        document.getElementById('account-menu').style.display = 'none';
+      }
     });
   </script>
 {{end}}

@@ -60,6 +60,12 @@ func SetupRoutes(ctrl *controllers.Controller, allowedOrigins []string) *http.Se
 	mux.HandleFunc("/api/auth/login", cors(loginLimiter.Middleware(ctrl.HandleLogin)))
 	mux.HandleFunc("/api/auth/logout", cors(ctrl.HandleLogout))
 	mux.HandleFunc("/api/auth/refresh", cors(ctrl.HandleRefresh))
+	mux.HandleFunc("/api/auth/me", cors(ctrl.HandleMe))
+	mux.HandleFunc("/api/auth/profile", cors(ctrl.HandleUpdateProfile))
+	// Reuses the login rate limiter: a wrong "current password" here returns
+	// 401 just like a failed login does, so the same brute-force protection
+	// applies without needing a second limiter.
+	mux.HandleFunc("/api/auth/password", cors(loginLimiter.Middleware(ctrl.HandleChangePassword)))
 
 	return mux
 }

@@ -282,3 +282,43 @@ func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	}
 	return &user, nil
 }
+
+// GetUserByID retrieves a user by their ID (the PASETO session's user_id claim).
+func (s *Store) GetUserByID(id string) (*models.User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var user models.User
+	err := s.users.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil // not found
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+	return &user, nil
+}
+
+// UpdateUserName changes a user's display name.
+func (s *Store) UpdateUserName(id, name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	_, err := s.users.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"name": name}})
+	if err != nil {
+		return fmt.Errorf("update user name: %w", err)
+	}
+	return nil
+}
+
+// UpdateUserPassword replaces a user's stored password hash.
+func (s *Store) UpdateUserPassword(id, passwordHash string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	_, err := s.users.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"password_hash": passwordHash}})
+	if err != nil {
+		return fmt.Errorf("update user password: %w", err)
+	}
+	return nil
+}
